@@ -36,8 +36,16 @@ export async function fetchEconomicCalendar() {
   if (_calendarCache && Date.now() - _calendarFetched < 15 * 60_000)
     return _calendarCache;
 
+  // Fetch both this week and next week in parallel
+  const urls = [
+    "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+    "https://nfs.faireconomy.media/ff_calendar_nextweek.json",
+  ];
+
   try {
-    const raw = await fetchJson("https://nfs.faireconomy.media/ff_calendar_thisweek.json");
+    const results = await Promise.allSettled(urls.map(u => fetchJson(u)));
+    const raw = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+
     _calendarCache = raw
       .filter((e) => e.impact === "High" || e.impact === "Medium")
       .map((e) => ({
@@ -91,7 +99,7 @@ const CURRENCY_KEYWORDS = {
 let _headlinesCache = {};
 let _headlinesFetched = 0;
 
-async function fetchHeadlines() {
+export async function fetchHeadlines() {
   if (!NEWS_API_KEY) return [];
   if (Date.now() - _headlinesFetched < 5 * 60_000) return _headlinesCache;
 

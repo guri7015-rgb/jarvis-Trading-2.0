@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>JARVIS Trading OS v2</title>
 <style>
-:root{--bg:#050810;--surface:#0a0f1e;--card:#0e1628;--border:#1a2540;--text:#e2e8f0;--muted:#4a5568;--cyan:#00d4ff;--green:#00ff88;--red:#ff3366;--yellow:#ffd700;--purple:#b16ff1;--font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono','Fira Code',monospace}
+:root{--bg:#f0f2f7;--surface:#ffffff;--card:#ffffff;--border:#e2e6ef;--text:#1a202c;--muted:#718096;--cyan:#0066cc;--green:#16a34a;--red:#dc2626;--yellow:#d97706;--purple:#7c3aed;--font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono','Fira Code',monospace}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;height:100vh;overflow:hidden;display:grid;grid-template-rows:52px 1fr;grid-template-columns:220px 1fr 280px}
 
@@ -310,7 +310,10 @@ canvas{display:block;width:100%}
     <div id="smc-detail-wrap" style="color:var(--muted);font-size:11px">No SMC signals yet</div>
   </div>
   <div class="panel-content" id="news-panel" style="display:none">
-    <div style="color:var(--muted)">Loading calendar…</div>
+    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Upcoming Events</div>
+    <div id="news-calendar-feed">Loading…</div>
+    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:10px 0 6px">Breaking Headlines</div>
+    <div id="news-headlines-feed">Loading…</div>
   </div>
 </div>
 
@@ -326,12 +329,13 @@ setInterval(() => {
 
 // ── Sidebar nav ───────────────────────────────────────────────────────────────
 function navTo(sectionId, el) {
-  // Update active state on the clicked nav item
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (el) el.classList.add('active');
-  // Scroll target section into view inside main
   const target = document.getElementById(sectionId);
-  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const main   = document.getElementById('main');
+  if (target && main) {
+    main.scrollTo({ top: target.offsetTop - 8, behavior: 'smooth' });
+  }
 }
 
 // ── Tab switcher ──────────────────────────────────────────────────────────────
@@ -476,9 +480,34 @@ function renderCalendar(events) {
     </div>`;
   }).join('');
   wrap.innerHTML = rows;
-  newsPanel.innerHTML = `<div style="font-size:12px">${events.slice(0,20).map(e =>
-    `<div class="feed-item"><span class="${e.impact==='High'?'red':'yellow'}">[${e.impact}]</span> ${e.currency} — ${e.title} @ ${e.time || 'TBD'}</div>`
-  ).join('')}</div>`;
+
+  // Populate news panel calendar section
+  const calFeed = document.getElementById('news-calendar-feed');
+  if (calFeed) {
+    calFeed.innerHTML = events.length
+      ? events.slice(0, 20).map(e => {
+          const mins = e.timestamp ? Math.round((e.timestamp - Date.now()) / 60_000) : null;
+          const when = mins !== null ? (mins < 0 ? `${Math.abs(mins)}m ago` : `in ${mins}m`) : e.time || 'TBD';
+          return `<div class="feed-item"><span class="${e.impact==='High'?'red':'yellow'}" style="font-size:10px">[${e.impact}]</span> <b>${e.currency}</b> — ${e.title} <span class="muted" style="font-size:10px">${when}</span></div>`;
+        }).join('')
+      : '<div style="color:var(--muted)">No upcoming events — check back Monday</div>';
+  }
+}
+
+// ── Render headlines ──────────────────────────────────────────────────────────
+function renderHeadlines(headlines) {
+  const el = document.getElementById('news-headlines-feed');
+  if (!el) return;
+  if (!headlines || !headlines.length) {
+    el.innerHTML = '<div style="color:var(--muted)">No headlines (check NEWS_API_KEY in Railway variables)</div>';
+    return;
+  }
+  el.innerHTML = headlines.map(h =>
+    `<div class="feed-item">
+      <div style="font-size:11px;line-height:1.4">${h.title}</div>
+      <div class="feed-time">${h.source} · ${h.published ? new Date(h.published).toUTCString().slice(17,25)+' UTC' : ''}</div>
+    </div>`
+  ).join('');
 }
 
 // ── Equity sparkline ──────────────────────────────────────────────────────────
@@ -581,13 +610,14 @@ function updateEquityDisplay(acct) {
 // ── Main refresh ──────────────────────────────────────────────────────────────
 async function refresh() {
   try {
-    const [stateRes, posRes, calRes, strRes, riskRes, acctRes] = await Promise.allSettled([
+    const [stateRes, posRes, calRes, strRes, riskRes, acctRes, hlRes] = await Promise.allSettled([
       fetch(`${API}/api/brain/state`).then(r => r.json()),
       fetch(`${API}/api/brain/positions`).then(r => r.json()),
       fetch(`${API}/api/news/calendar`).then(r => r.json()),
       fetch(`${API}/api/brain/strength`).then(r => r.json()),
       fetch(`${API}/api/brain/risk`).then(r => r.json()),
       fetch(`${API}/api/brain/account`).then(r => r.json()),
+      fetch(`${API}/api/news/headlines`).then(r => r.json()),
     ]);
 
     const state    = stateRes.status  === 'fulfilled' ? stateRes.value  : null;
@@ -596,6 +626,7 @@ async function refresh() {
     const strData  = strRes.status    === 'fulfilled' ? strRes.value    : null;
     const riskData = riskRes.status   === 'fulfilled' ? riskRes.value   : null;
     const acctData = acctRes.status   === 'fulfilled' ? acctRes.value   : null;
+    const hlData   = hlRes.status     === 'fulfilled' ? hlRes.value     : null;
 
     // ── Mode badge from server config ─────────────────────────────────────────
     if (state?.config) updateModeBadge(state.config);
@@ -667,6 +698,7 @@ async function refresh() {
     if (posData?.trades) renderPositions(posData.trades);
     if (calData?.events) renderCalendar(calData.events);
     if (strData?.strength) renderStrength(strData.strength, strData.ranked);
+    if (hlData?.headlines) renderHeadlines(hlData.headlines);
 
     // ── Portfolio heat gauge — riskData.heat has totalHeatUsd ─────────────────
     // Server returns { risk: getRiskState(), heat: getHeatState() }

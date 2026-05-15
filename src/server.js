@@ -11,7 +11,7 @@ import { fileURLToPath } from "url";
 import { PORT, INSTRUMENTS } from "./config.js";
 import { fullScan, executeTopSignal, getScanState } from "./brain.js";
 import { getAccountSummary, getOpenTrades, closeAllPositions, getMultiCandles } from "./oanda.js";
-import { fetchEconomicCalendar, getRelevantEvents } from "./news.js";
+import { fetchEconomicCalendar, getRelevantEvents, fetchHeadlines } from "./news.js";
 import { runBacktest, runFullBacktest } from "./backtest.js";
 import { calcStrength, rankCurrencies } from "./strength.js";
 import { getHeatState, atrPercentile, getVolRegime } from "./volatility.js";
@@ -122,6 +122,14 @@ async function router(req, res) {
     try {
       const events = await fetchEconomicCalendar();
       json(res, 200, { ok: true, count: events.length, events: events.slice(0, 50) });
+    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/news/headlines") {
+    try {
+      const headlines = await fetchHeadlines();
+      json(res, 200, { ok: true, count: headlines.length, headlines: headlines.slice(0, 20) });
     } catch (e) { json(res, 500, { ok: false, error: e.message }); }
     return;
   }
