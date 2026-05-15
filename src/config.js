@@ -16,23 +16,33 @@ if (existsSync(envPath)) {
   });
 }
 
-export const OANDA_KEY    = process.env.OANDA_API_KEY     || "";
-export const OANDA_ACCT   = process.env.OANDA_ACCOUNT_ID  || "";
-export const OANDA_ENV    = process.env.OANDA_ENV         || "practice";
-export const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || "";
-export const NEWS_API_KEY  = process.env.NEWS_API_KEY      || "";
-export const PORT          = parseInt(process.env.PORT || "4000", 10);
-export const READ_ONLY     = process.env.JARVIS_READ_ONLY !== "false";
+export const OANDA_KEY     = process.env.OANDA_API_KEY      || "";
+export const OANDA_ACCT    = process.env.OANDA_ACCOUNT_ID   || "";
+export const OANDA_ENV     = process.env.OANDA_ENV          || "practice";
+export const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY  || "";
+export const NEWS_API_KEY  = process.env.NEWS_API_KEY       || "";
+export const PORT          = parseInt(process.env.PORT || "8080", 10);
+export const READ_ONLY     = process.env.JARVIS_READ_ONLY   !== "false";
 export const DEMO_ENABLED  = process.env.DEMO_TRADING_ENABLED === "true";
+
+// ── Binance ───────────────────────────────────────────────────────────────────
+export const BINANCE_KEY     = process.env.BINANCE_API_KEY    || "";
+export const BINANCE_SECRET  = process.env.BINANCE_SECRET_KEY || "";
+export const BINANCE_TESTNET = process.env.BINANCE_TESTNET === "true";
 
 export const OANDA_HOST = OANDA_ENV === "live"
   ? "api-fxtrade.oanda.com"
   : "api-fxpractice.oanda.com";
 
-// ── Universe ──────────────────────────────────────────────────────────────────
+// ── Forex universe ────────────────────────────────────────────────────────────
 export const INSTRUMENTS = [
   "EUR_USD", "GBP_USD", "USD_JPY", "USD_CHF",
   "AUD_USD", "USD_CAD", "NZD_USD", "XAU_USD",
+];
+
+// ── Crypto universe ───────────────────────────────────────────────────────────
+export const CRYPTO_INSTRUMENTS = [
+  "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
 ];
 
 // Correlation groups — never hold two from the same group simultaneously
@@ -121,4 +131,10 @@ export const CONFIG = {
 
   // Multi-timeframe
   mtfMinConfluence: 0.34,        // at least 1/3 timeframes must agree (2/3 for full boost)
+
+  // ── Crypto-specific ────────────────────────────────────────────────────────
+  cryptoRiskPerTrade:   0.01,    // 1% risk per crypto trade
+  cryptoMaxPositions:   3,       // max simultaneous crypto positions
+  cryptoMaxDailyTrades: 6,       // max crypto trades per day
+  cryptoLeverage:       5,       // 5× leverage on Binance Futures
 };

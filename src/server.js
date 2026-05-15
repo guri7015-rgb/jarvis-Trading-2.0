@@ -8,7 +8,7 @@ import http from "http";
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { PORT, INSTRUMENTS } from "./config.js";
+import { PORT, INSTRUMENTS, BINANCE_KEY, CONFIG } from "./config.js";
 import { fullScan, executeTopSignal, getScanState } from "./brain.js";
 import { getAccountSummary, getOpenTrades, closeAllPositions, getMultiCandles } from "./oanda.js";
 import { fetchEconomicCalendar, getRelevantEvents, fetchHeadlines } from "./news.js";
@@ -16,6 +16,9 @@ import { runBacktest, runFullBacktest } from "./backtest.js";
 import { calcStrength, rankCurrencies } from "./strength.js";
 import { getHeatState, atrPercentile, getVolRegime } from "./volatility.js";
 import { getRiskState } from "./risk.js";
+import { cryptoFullScan, executeCryptoTopSignal, getCryptoState } from "./cryptoBrain.js";
+import { getCryptoAccount, getCryptoPositions, closeCryptoPosition, CRYPTO_QTY_DEC } from "./binance.js";
+import { CRYPTO_INSTRUMENTS } from "./config.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 
@@ -174,6 +177,49 @@ async function router(req, res) {
     return;
   }
 
+  // ════ CRYPTO ENDPOINTS ════
+
+  if (url.pathname === "/api/crypto/scan") {
+    try   { json(res, 200, await cryptoFullScan()); }
+    catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/crypto/execute" && req.method === "POST") {
+    try   { json(res, 200, await executeCryptoTopSignal()); }
+    catch (e) { json(res, 500, { executed: false, error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/crypto/state") {
+    try   { json(res, 200, getCryptoState()); }
+    catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/crypto/positions") {
+    try   { json(res, 200, { trades: await getCryptoPositions() }); }
+    catch (e) { json(res, 500, { error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/crypto/account") {
+    try   { json(res, 200, await getCryptoAccount()); }
+    catch (e) { json(res, 500, { error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/crypto/kill" && req.method === "POST") {
+    try {
+      const positions = await getCryptoPositions();
+      const results = await Promise.allSettled(
+        [...new Set(positions.map(p => p.instrument))].map(closeCryptoPosition)
+      );
+      json(res, 200, { killed: results.length, results: results.map(r => r.status) });
+    } catch (e) { json(res, 500, { error: e.message }); }
+    return;
+  }
+
   json(res, 404, { error: "Not found", available: [
     "GET /api/brain/scan", "POST /api/brain/execute", "GET /api/brain/state",
     "GET /api/brain/account", "GET /api/brain/positions", "GET /api/brain/strength",
@@ -201,17 +247,32 @@ server.listen(PORT, () => {
 `);
 });
 
-// Auto-scan + auto-execute every 60s
+// Auto-scan + auto-execute: Forex every 60s, Crypto every 90s (offset by 30s)
 setInterval(async () => {
   try {
     const result = await fullScan();
     if (result?.signals?.length > 0) {
       const exec = await executeTopSignal();
-      if (exec.executed) {
-        process.stdout.write(`[AUTO] Executed ${exec.instrument} ${exec.direction} ${exec.units}u @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
-      } else if (exec.reason) {
-        process.stdout.write(`[AUTO] No execution: ${exec.reason}\n`);
-      }
+      if (exec.executed)
+        process.stdout.write(`[FOREX AUTO] ${exec.instrument} ${exec.direction} ${exec.units}u @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
+      else if (exec.reason)
+        process.stdout.write(`[FOREX] No exec: ${exec.reason}\n`);
     }
-  } catch (e) { process.stdout.write(`[AUTO] Error: ${e.message}\n`); }
+  } catch (e) { process.stdout.write(`[FOREX AUTO] Error: ${e.message}\n`); }
 }, 60_000);
+
+setTimeout(() => {
+  setInterval(async () => {
+    if (!BINANCE_KEY) return;
+    try {
+      const result = await cryptoFullScan();
+      if (result?.signals?.length > 0) {
+        const exec = await executeCryptoTopSignal();
+        if (exec.executed)
+          process.stdout.write(`[CRYPTO AUTO] ${exec.instrument} ${exec.direction} ${exec.units} @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
+        else if (exec.reason)
+          process.stdout.write(`[CRYPTO] No exec: ${exec.reason}\n`);
+      }
+    } catch (e) { process.stdout.write(`[CRYPTO AUTO] Error: ${e.message}\n`); }
+  }, 90_000);
+}, 30_000);  // offset 30s from forex scan
