@@ -67,7 +67,7 @@ export const CONFIG = {
 
   // Currency strength
   strengthLookback:  24,    // 24 H1 bars = 24h strength
-  strengthThreshold: 0.4,   // minimum differential for strength signal
+  strengthThreshold: 0.3,   // minimum differential for strength signal
 
   // Market regime (ADX)
   adxPeriod:         14,

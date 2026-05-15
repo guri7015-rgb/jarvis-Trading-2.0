@@ -73,7 +73,7 @@ export async function placeLimitEntry(signal, units, expiryHours = 8) {
         timeInForce: 'GTC',
       },
       clientExtensions: {
-        comment: `SMC|${signal.strategy}|${signal.confidence}%`.slice(0, 128),
+        comment: `${signal.strategy}|${signal.confidence}%|${signal.reasoning || ''}`.slice(0, 128),
       },
     },
   };
@@ -83,8 +83,8 @@ export async function placeLimitEntry(signal, units, expiryHours = 8) {
 
 // ── Market Entry (fallback / non-SMC signals) ─────────────────────────────────
 export async function placeMarketEntry(signal, units) {
-  return placeOrder(signal.instrument, signal.direction === 'LONG' ? units : -units, signal.sl, signal.tp,
-    `${signal.strategy}|${signal.confidence}%`);
+  const comment = `${signal.strategy}|${signal.confidence}%|${signal.reasoning || ''}`.slice(0, 128);
+  return placeOrder(signal.instrument, signal.direction === 'LONG' ? units : -units, signal.sl, signal.tp, comment);
 }
 
 // ── Partial Take Profit ───────────────────────────────────────────────────────

@@ -87,11 +87,11 @@ export function classifyRegime(enrichedCandles) {
  * Which strategy types work best in each regime.
  */
 export const REGIME_STRATEGY_MAP = {
-  STRONG_BULL: ["trend_follow", "strength"],
-  BULL:        ["trend_follow", "strength", "mean_reversion"],
-  RANGING:     ["mean_reversion"],
-  BEAR:        ["trend_follow", "strength", "mean_reversion"],
-  STRONG_BEAR: ["trend_follow", "strength"],
-  VOLATILE:    [],   // no trades in volatile conditions
-  UNKNOWN:     [],
+  STRONG_BULL: ["trend_follow", "strength", "breakout"],
+  BULL:        ["trend_follow", "strength", "mean_reversion", "breakout"],
+  RANGING:     ["mean_reversion", "strength"],
+  BEAR:        ["trend_follow", "strength", "mean_reversion", "breakout"],
+  STRONG_BEAR: ["trend_follow", "strength", "breakout"],
+  VOLATILE:    ["mean_reversion"],   // only fade extremes in volatile conditions
+  UNKNOWN:     ["strength"],
 };

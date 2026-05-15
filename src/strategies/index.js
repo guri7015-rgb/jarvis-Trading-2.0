@@ -26,18 +26,21 @@ export function trendFollow(instrument, enriched) {
   const prev = enriched[enriched.length - 2];
   if (!last?.atr || !last?.rsi || !prev) return null;
 
-  const { close: entry, ema20, ema50, macdHist, rsi: rsiVal, atr, adx: adxVal } = last;
-  if (!adxVal || adxVal < CONFIG.adxTrendThreshold) return null;  // require trending market
+  const { close: entry, ema20, ema50, ema200, macdHist, rsi: rsiVal, atr, adx: adxVal, diPlus, diMinus } = last;
+  if (!adxVal || adxVal < CONFIG.adxTrendThreshold) return null;
 
-  const crossUp   = ema20 > ema50 && prev.ema20 <= prev.ema50;
-  const crossDown = ema20 < ema50 && prev.ema20 >= prev.ema50;
-  const macdUp    = macdHist > 0  && prev.macdHist <= 0;
-  const macdDown  = macdHist < 0  && prev.macdHist >= 0;
+  // Fire during SUSTAINED trend alignment, not just at the crossover bar
+  const trendUp   = ema20 > ema50;
+  const trendDown = ema20 < ema50;
+  const macdBull  = macdHist > 0;
+  const macdBear  = macdHist < 0;
+  const crossUp   = trendUp   && prev.ema20 <= prev.ema50;
+  const crossDown = trendDown && prev.ema20 >= prev.ema50;
 
   let direction = null;
-  if ((crossUp || macdUp) && rsiVal >= 45 && rsiVal <= 65 && ema20 > ema50)
+  if (trendUp   && macdBull && rsiVal >= 40 && rsiVal <= 68 && (!diPlus  || diPlus  > diMinus))
     direction = "LONG";
-  if ((crossDown || macdDown) && rsiVal >= 35 && rsiVal <= 55 && ema20 < ema50)
+  if (trendDown && macdBear && rsiVal >= 32 && rsiVal <= 60 && (!diMinus || diMinus > diPlus))
     direction = "SHORT";
   if (!direction) return null;
 
@@ -46,13 +49,16 @@ export function trendFollow(instrument, enriched) {
   const rrVal = rr(entry, sl, tp, direction);
   if (rrVal < CONFIG.minRR) return null;
 
-  const confidence = 60 + (adxVal > 35 ? 10 : 0) + (crossUp || crossDown ? 10 : 5);
+  let confidence = 62;
+  if (crossUp || crossDown) confidence += 8;   // fresh crossover = stronger conviction
+  if (adxVal > 35)          confidence += 7;
+  if (ema200 && (direction === "LONG" ? ema50 > ema200 : ema50 < ema200)) confidence += 5;
 
   return {
     instrument, direction, entry, sl, tp, rr: rrVal,
     confidence: Math.min(confidence, 90),
     strategy: "trend_follow",
-    reasoning: `EMA${crossUp || crossDown ? " crossover" : "20>50"} + MACD ${direction === "LONG" ? "bullish" : "bearish"} | RSI ${rsiVal.toFixed(1)} | ADX ${adxVal.toFixed(1)}`,
+    reasoning: `EMA20${direction === "LONG" ? ">" : "<"}EMA50${crossUp || crossDown ? " (fresh cross)" : ""} + MACD ${direction === "LONG" ? "bullish" : "bearish"} | RSI ${rsiVal.toFixed(1)} | ADX ${adxVal.toFixed(1)}`,
   };
 }
 
@@ -72,7 +78,7 @@ export function strengthStrategy(instrument, enriched, candleMap) {
   const rrVal = rr(entry, sl, tp, sig.direction);
   if (rrVal < CONFIG.minRR) return null;
 
-  const confidence = 55 + Math.min(sig.differential * 40, 30);
+  const confidence = 62 + Math.min(sig.differential * 40, 28);
 
   return {
     instrument, direction: sig.direction, entry, sl, tp, rr: rrVal,
@@ -114,7 +120,7 @@ export function meanReversion(instrument, enriched) {
   const rrVal = rr(entry, sl, tp, direction);
   if (rrVal < CONFIG.minRR) return null;
 
-  const confidence = 55 + (nearEma ? 8 : 0) + divBonus;
+  const confidence = 63 + (nearEma ? 8 : 0) + divBonus;
 
   return {
     instrument, direction, entry, sl, tp, rr: rrVal,
@@ -224,6 +230,9 @@ export function runStrategies(instrument, enriched, candleMap, regime) {
   if (allowed.includes("mean_reversion")) {
     const s = meanReversion(instrument, enriched); if (s) signals.push(s);
   }
+  if (allowed.includes("breakout")) {
+    const s = breakout(instrument, enriched); if (s) signals.push(s);
+  }
   if (instrument === "XAU_USD" && allowed.length > 0) {
     const goldEnriched = enriched;
     const usdJpyC = candleMap["USD_JPY"];
@@ -231,10 +240,6 @@ export function runStrategies(instrument, enriched, candleMap, regime) {
       const s = goldDivergence(goldEnriched, enrich(usdJpyC), candleMap);
       if (s) signals.push(s);
     }
-  }
-  // Breakout is regime-agnostic but only in trending markets
-  if (regime.includes("BULL") || regime.includes("BEAR")) {
-    const s = breakout(instrument, enriched); if (s) signals.push(s);
   }
 
   // Strategy 6: SMC — always runs, strongest when structure aligns with regime
