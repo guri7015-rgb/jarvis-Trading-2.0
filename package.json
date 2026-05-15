@@ -1,0 +1,16 @@
+{
+  "name": "jarvis-v2",
+  "version": "2.0.0",
+  "description": "JARVIS Trading OS v2 — Professional forex + gold trading brain",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev":   "node --watch src/server.js"
+  },
+  "dependencies": {
+    "anthropic": "^0.30.0",
+    "dotenv":    "^16.4.0"
+  },
+  "engines": { "node": ">=18.0.0" }
+}

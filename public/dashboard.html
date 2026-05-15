@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>JARVIS Trading OS v2</title>
+<style>
+:root{--bg:#050810;--surface:#0a0f1e;--card:#0e1628;--border:#1a2540;--text:#e2e8f0;--muted:#4a5568;--cyan:#00d4ff;--green:#00ff88;--red:#ff3366;--yellow:#ffd700;--purple:#b16ff1;--font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono','Fira Code',monospace}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;height:100vh;overflow:hidden;display:grid;grid-template-rows:52px 1fr;grid-template-columns:220px 1fr 280px}
+
+/* ── Top bar ── */
+header{grid-column:1/-1;display:flex;align-items:center;padding:0 20px;gap:16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:10}
+.logo{font-size:16px;font-weight:800;background:linear-gradient(90deg,var(--cyan),#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.5px;white-space:nowrap}
+.header-metrics{display:flex;gap:20px;flex:1;justify-content:center}
+.hm{display:flex;flex-direction:column;align-items:center;gap:1px}
+.hm-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.hm-value{font-family:var(--mono);font-size:13px;font-weight:700}
+.badge{padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px}
+.badge-live{background:#0a2d1a;color:var(--green);border:1px solid #00ff8840}
+.badge-demo{background:#1a1a0a;color:var(--yellow);border:1px solid #ffd70040}
+.badge-ro{background:#1a0a1a;color:var(--purple);border:1px solid #b16ff140}
+.kill-btn{margin-left:auto;padding:5px 14px;background:#1a0510;border:1px solid var(--red);color:var(--red);border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;transition:.2s}
+.kill-btn:hover{background:var(--red);color:#000}
+#clock{color:var(--muted);font-size:11px;font-family:var(--mono);white-space:nowrap}
+.pulse{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;margin-right:6px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* ── Sidebar ── */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0}
+.nav-section{padding:8px 16px 4px;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;border-radius:0;transition:.15s;color:var(--muted);font-size:12px}
+.nav-item:hover,.nav-item.active{background:#1a2540;color:var(--cyan)}
+.nav-item .icon{width:14px;text-align:center}
+
+/* ── Main ── */
+main{overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+
+/* ── Cards ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.card-hdr{padding:8px 14px;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);display:flex;align-items:center;justify-content:space-between}
+.card-body{padding:12px 14px}
+
+/* ── Hero metrics ── */
+.hero{display:flex;flex-direction:column;justify-content:center;align-items:center;padding:16px 10px;gap:4px}
+.hero-val{font-family:var(--mono);font-size:22px;font-weight:800}
+.hero-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.hero-sub{font-size:11px;color:var(--muted)}
+
+/* ── Tables ── */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.8px;padding:0 8px 6px;border-bottom:1px solid var(--border)}
+td{padding:7px 8px;border-bottom:1px solid #1a2540;font-family:var(--mono);font-size:12px}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#131e33}
+
+/* ── Tags ── */
+.tag{display:inline-block;border-radius:3px;padding:2px 6px;font-size:10px;font-weight:700}
+.tag-long{background:#0a2d1a;color:var(--green)}
+.tag-short{background:#2d0a14;color:var(--red)}
+.tag-bull{background:#0a2020;color:var(--cyan)}
+.tag-bear{background:#20080a;color:var(--red)}
+.tag-range{background:#1a1a0a;color:var(--yellow)}
+.tag-pass{background:#0a2d1a;color:var(--green)}
+.tag-weak{background:#1a1a0a;color:var(--yellow)}
+.tag-fail{background:#2d0a14;color:var(--red)}
+.green{color:var(--green)}.red{color:var(--red)}.cyan{color:var(--cyan)}.yellow{color:var(--yellow)}.purple{color:var(--purple)}.muted{color:var(--muted)}
+
+/* ── Gauge bar ── */
+.gauge-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.gauge-label{width:90px;font-size:11px;color:var(--muted);flex-shrink:0}
+.gauge-track{flex:1;background:#0d1525;border-radius:4px;height:5px;overflow:hidden}
+.gauge-fill{height:100%;border-radius:4px;transition:width .4s}
+.gauge-val{width:52px;text-align:right;font-family:var(--mono);font-size:11px;font-weight:700;flex-shrink:0}
+
+/* ── Strength bar ── */
+.strength-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.str-ccy{width:32px;font-family:var(--mono);font-weight:700;font-size:12px}
+.str-bar-wrap{flex:1;display:flex;align-items:center;gap:4px}
+.str-neg,.str-pos{height:8px;border-radius:2px;transition:width .3s;min-width:2px}
+.str-neg{background:var(--red)}
+.str-pos{background:var(--green)}
+.str-center{width:1px;background:var(--border)}
+.str-val{width:40px;text-align:right;font-family:var(--mono);font-size:11px}
+
+/* ── Equity chart ── */
+canvas{display:block;width:100%}
+
+/* ── Right panel ── */
+.right-panel{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.panel-tabs{display:flex;border-bottom:1px solid var(--border)}
+.panel-tab{flex:1;padding:10px;text-align:center;font-size:11px;cursor:pointer;color:var(--muted);transition:.15s;font-weight:600}
+.panel-tab.active{color:var(--cyan);border-bottom:2px solid var(--cyan)}
+.panel-content{flex:1;overflow-y:auto;padding:12px}
+
+/* ── Activity feed ── */
+.feed-item{padding:7px 0;border-bottom:1px solid var(--border);font-size:11px;line-height:1.5}
+.feed-item:last-child{border-bottom:none}
+.feed-time{color:var(--muted);font-family:var(--mono);font-size:10px}
+.feed-opened{color:var(--green)}
+.feed-closed-tp{color:var(--cyan)}
+.feed-closed-sl{color:var(--red)}
+.feed-scan{color:var(--muted)}
+.feed-warn{color:var(--yellow)}
+
+/* ── Regime ring ── */
+.regime-ring{text-align:center;padding:12px 0}
+.regime-label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+.regime-value{font-size:18px;font-weight:800;color:var(--cyan)}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">&#9889; JARVIS v2</div>
+
+  <div class="header-metrics">
+    <div class="hm"><span class="hm-label">Equity</span><span class="hm-value cyan" id="h-equity">$—</span></div>
+    <div class="hm"><span class="hm-label">Day P&L</span><span class="hm-value" id="h-daypnl">—</span></div>
+    <div class="hm"><span class="hm-label">Open</span><span class="hm-value" id="h-open">—</span></div>
+    <div class="hm"><span class="hm-label">Signals</span><span class="hm-value cyan" id="h-signals">—</span></div>
+    <div class="hm"><span class="hm-label">Session</span><span class="hm-value" id="h-session">—</span></div>
+    <div class="hm"><span class="hm-label">Mode</span><span id="mode-badge" class="badge badge-ro">READ ONLY</span></div>
+  </div>
+
+  <span id="clock" style="margin-left:auto"></span>
+  <button class="kill-btn" onclick="killAll()">&#9889; KILL</button>
+</header>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="nav-section">Mission Control</div>
+  <div class="nav-item active"><span class="icon">⊞</span> Dashboard</div>
+  <div class="nav-item"><span class="icon">🧠</span> Brain</div>
+  <div class="nav-section">Markets</div>
+  <div class="nav-item"><span class="icon">📊</span> Signals</div>
+  <div class="nav-item"><span class="icon">💱</span> Strength</div>
+  <div class="nav-item"><span class="icon">🌐</span> Regime</div>
+  <div class="nav-section">Intelligence</div>
+  <div class="nav-item"><span class="icon">📰</span> News & Calendar</div>
+  <div class="nav-item"><span class="icon">📈</span> Backtest</div>
+  <div class="nav-section">Risk</div>
+  <div class="nav-item"><span class="icon">🛡️</span> Risk Manager</div>
+  <div class="nav-item"><span class="icon">📋</span> Trade Journal</div>
+  <div class="nav-section">System</div>
+  <div class="nav-item"><span class="icon">⚙️</span> Settings</div>
+  <div class="nav-item"><span class="icon">🔌</span> Broker</div>
+</nav>
+
+<!-- Main content -->
+<main id="main">
+
+  <!-- Row 1: Hero metrics -->
+  <div class="grid4">
+    <div class="card"><div class="hero">
+      <span class="hero-val cyan" id="equity">$0.00</span>
+      <span class="hero-label">Equity / NAV</span>
+      <span class="hero-sub" id="unrealized">0.00 unrealized</span>
+    </div></div>
+    <div class="card"><div class="hero">
+      <span class="hero-val" id="daypnl">$0.00</span>
+      <span class="hero-label">Day P&L</span>
+      <span class="hero-sub" id="daily-trades">0 trades today</span>
+    </div></div>
+    <div class="card"><div class="hero">
+      <span class="hero-val" id="winrate">0%</span>
+      <span class="hero-label">Win Rate</span>
+      <span class="hero-sub" id="wl-count">0W / 0L</span>
+    </div></div>
+    <div class="card"><div class="hero">
+      <span class="hero-val" id="drawdown">0.0%</span>
+      <span class="hero-label">Max Drawdown</span>
+      <span class="hero-sub" id="dd-mode">Normal mode</span>
+    </div></div>
+  </div>
+
+  <!-- Row 2: Signals + Strength + Regime -->
+  <div class="grid2">
+    <!-- Signals table -->
+    <div class="card">
+      <div class="card-hdr">
+        <span><span class="pulse"></span>Live Signals</span>
+        <span id="signal-count" class="cyan">0 found</span>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="signals-wrap"><div style="padding:20px;text-align:center;color:var(--muted)">Scanning…</div></div>
+      </div>
+    </div>
+
+    <!-- Currency Strength -->
+    <div class="card">
+      <div class="card-hdr"><span>Currency Strength</span><span class="muted" id="strength-updated">—</span></div>
+      <div class="card-body" id="strength-wrap">
+        <div style="color:var(--muted)">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Open Positions + Regime + Risk -->
+  <div class="grid3">
+    <!-- Open Positions -->
+    <div class="card" style="grid-column:span 2">
+      <div class="card-hdr"><span>Open Positions</span><span id="pos-count" class="cyan">0</span></div>
+      <div class="card-body" style="padding:0">
+        <div id="positions-wrap"><div style="padding:16px;text-align:center;color:var(--muted)">No open positions</div></div>
+      </div>
+    </div>
+
+    <!-- Regime + Risk -->
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div class="card-hdr">Market Regime</div>
+        <div class="card-body" id="regime-wrap">
+          <div style="color:var(--muted)">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">Risk Status</div>
+        <div class="card-body">
+          <div class="gauge-row">
+            <span class="gauge-label">Daily P&L</span>
+            <div class="gauge-track"><div class="gauge-fill" id="g-daypnl" style="width:0%;background:var(--green)"></div></div>
+            <span class="gauge-val green" id="gv-daypnl">$0</span>
+          </div>
+          <div class="gauge-row">
+            <span class="gauge-label">Open Trades</span>
+            <div class="gauge-track"><div class="gauge-fill" id="g-open" style="width:0%;background:var(--cyan)"></div></div>
+            <span class="gauge-val cyan" id="gv-open">0/3</span>
+          </div>
+          <div class="gauge-row">
+            <span class="gauge-label">Drawdown</span>
+            <div class="gauge-track"><div class="gauge-fill" id="g-dd" style="width:0%;background:var(--red)"></div></div>
+            <span class="gauge-val red" id="gv-dd">0%</span>
+          </div>
+          <div class="gauge-row">
+            <span class="gauge-label">Daily Trades</span>
+            <div class="gauge-track"><div class="gauge-fill" id="g-dt" style="width:0%;background:var(--yellow)"></div></div>
+            <span class="gauge-val yellow" id="gv-dt">0/6</span>
+          </div>
+          <div class="gauge-row">
+            <span class="gauge-label">Port. Heat</span>
+            <div class="gauge-track"><div class="gauge-fill" id="g-heat" style="width:0%;background:var(--purple)"></div></div>
+            <span class="gauge-val purple" id="gv-heat">0.0%</span>
+          </div>
+          <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.8px">Vol Regimes</div>
+            <div id="vol-regime-mini" style="display:flex;flex-wrap:wrap;gap:4px;font-size:10px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: Equity chart + Economic calendar -->
+  <div class="grid2">
+    <div class="card">
+      <div class="card-hdr">Equity Curve</div>
+      <div class="card-body"><canvas id="equity-chart" style="height:80px"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><span>Economic Calendar</span><span id="cal-count" class="muted">0 events</span></div>
+      <div class="card-body" style="padding:0;max-height:130px;overflow-y:auto" id="calendar-wrap">
+        <div style="padding:12px;color:var(--muted)">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 5: Backtest panel -->
+  <div class="card">
+    <div class="card-hdr">
+      <span>Backtest Engine — Monte Carlo + Walk-Forward</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="bt-instrument" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px">
+          <option>EUR_USD</option><option>GBP_USD</option><option>USD_JPY</option>
+          <option>XAU_USD</option><option>AUD_USD</option><option>USD_CHF</option>
+        </select>
+        <select id="bt-candles" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-size:11px">
+          <option value="300">300 bars</option><option value="500" selected>500 bars</option><option value="1000">1000 bars</option>
+        </select>
+        <button onclick="runBacktest()" style="background:#0a1a2d;border:1px solid var(--cyan);color:var(--cyan);padding:3px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700">▶ Run</button>
+      </div>
+    </div>
+    <div class="card-body" id="bt-results">
+      <div style="color:var(--muted);text-align:center;padding:12px">Select instrument and click Run to backtest with Monte Carlo simulation</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Right panel -->
+<div class="right-panel">
+  <div class="panel-tabs">
+    <div class="panel-tab active" onclick="switchTab(this,'activity')">Activity</div>
+    <div class="panel-tab" onclick="switchTab(this,'smc')">SMC</div>
+    <div class="panel-tab" onclick="switchTab(this,'news')">News</div>
+  </div>
+  <div class="panel-content" id="activity-panel">
+    <div class="feed-item feed-scan">Bot started — monitoring markets…</div>
+  </div>
+  <div class="panel-content" id="smc-panel" style="display:none">
+    <div id="smc-detail-wrap" style="color:var(--muted);font-size:11px">No SMC signals yet</div>
+  </div>
+  <div class="panel-content" id="news-panel" style="display:none">
+    <div style="color:var(--muted)">Loading calendar…</div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:4000';
+let equityHistory = [];
+let _lastSignalCount = 0;
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toUTCString().replace(' GMT',' UTC');
+}, 1000);
+
+// ── Tab switcher ──────────────────────────────────────────────────────────────
+function switchTab(el, id) {
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel-content').forEach(p => p.style.display = 'none');
+  el.classList.add('active');
+  document.getElementById(id + '-panel').style.display = '';
+}
+
+// ── Kill switch ───────────────────────────────────────────────────────────────
+async function killAll() {
+  if (!confirm('EMERGENCY KILL: close all positions?')) return;
+  const r = await fetch(`${API}/api/brain/kill`, { method: 'POST' }).then(r => r.json()).catch(() => null);
+  addFeed(`KILL switch activated — ${r?.killed ?? '?'} positions closed`, 'feed-warn');
+}
+
+// ── Feed ──────────────────────────────────────────────────────────────────────
+function addFeed(msg, cls = 'feed-scan') {
+  const panel = document.getElementById('activity-panel');
+  const d = document.createElement('div');
+  d.className = `feed-item ${cls}`;
+  const t = new Date().toUTCString().slice(17, 25);
+  d.innerHTML = `<span class="feed-time">${t}</span> ${msg}`;
+  panel.prepend(d);
+  if (panel.children.length > 80) panel.removeChild(panel.lastChild);
+}
+
+// ── Render signals ────────────────────────────────────────────────────────────
+function renderSignals(signals) {
+  const wrap = document.getElementById('signals-wrap');
+  document.getElementById('signal-count').textContent = signals.length + ' found';
+  document.getElementById('h-signals').textContent = signals.length;
+  if (!signals.length) {
+    wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted)">No signals — market scanning…</div>';
+    return;
+  }
+  const rows = signals.map(s => {
+    const isSmc = s.strategy === 'smc';
+    const smcBadge = isSmc ? `<span class="tag" style="background:#1a0a2d;color:var(--purple);font-size:9px">${s.entryType||'SMC'}</span>` : '';
+    const confluenceBadge = s.mtfConfluence != null
+      ? `<span style="font-size:9px;color:${s.mtfConfluence >= 0.66 ? 'var(--green)' : s.mtfConfluence >= 0.33 ? 'var(--yellow)' : 'var(--red)'}">MTF:${Math.round(s.mtfConfluence*100)}%</span>`
+      : '';
+    const volBadge = s.volRegime ? `<span style="font-size:9px;color:${s.volRegime==='NORMAL'?'var(--muted)':s.volRegime==='HIGH'?'var(--yellow)':'var(--red)'}">VOL:${s.volRegime}</span>` : '';
+    const execTag = isSmc ? `<span style="font-size:9px;color:var(--cyan)">LIMIT</span>` : `<span style="font-size:9px;color:var(--muted)">MKT</span>`;
+    return `<tr>
+      <td><b>${s.instrument}</b></td>
+      <td><span class="tag tag-${s.direction.toLowerCase()}">${s.direction}</span></td>
+      <td><span style="font-weight:700;color:${s.confidence>=80?'var(--green)':s.confidence>=70?'var(--cyan)':'var(--yellow)'}">${s.confidence}%</span></td>
+      <td>${s.entryLimit?.toFixed(5) || s.entry?.toFixed(5) || '—'} ${execTag}</td>
+      <td class="red">${s.sl?.toFixed(5) || '—'}</td>
+      <td class="green">${s.tp?.toFixed(5) || '—'}</td>
+      <td class="cyan">${s.rr}</td>
+      <td style="max-width:110px"><div style="font-size:10px">${s.strategy} ${smcBadge}</div><div style="margin-top:2px;display:flex;gap:4px">${confluenceBadge}${volBadge}</div></td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table><thead><tr>
+    <th>Pair</th><th>Dir</th><th>Conf</th><th>Entry / Exec</th><th>SL</th><th>TP</th><th>R:R</th><th>Strategy</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+  if (signals.length !== _lastSignalCount) {
+    _lastSignalCount = signals.length;
+    if (signals.length > 0) addFeed(`${signals.length} signal${signals.length>1?'s':''} found: ${signals.map(s=>s.instrument+' '+s.direction+' ('+s.strategy+')').join(', ')}`, 'feed-opened');
+  }
+}
+
+// ── Render strength ───────────────────────────────────────────────────────────
+function renderStrength(strength, ranked) {
+  if (!strength) return;
+  const wrap = document.getElementById('strength-wrap');
+  document.getElementById('strength-updated').textContent = new Date().toUTCString().slice(17,25) + ' UTC';
+  const rows = (ranked || Object.entries(strength).map(([c,s]) => ({ccy:c,score:s})))
+    .map(({ccy, score}) => {
+      const pct = Math.abs(score) * 50;
+      const pos = score > 0 ? `<div class="str-pos" style="width:${pct}%"></div>` : '<div style="width:0"></div>';
+      const neg = score < 0 ? `<div class="str-neg" style="width:${pct}%"></div>` : '<div style="width:0"></div>';
+      const color = score > 0.3 ? 'green' : score < -0.3 ? 'red' : 'muted';
+      return `<div class="strength-row">
+        <span class="str-ccy ${color}">${ccy}</span>
+        <div class="str-bar-wrap">${neg}<div class="str-center"></div>${pos}</div>
+        <span class="str-val ${color}">${score > 0 ? '+' : ''}${score.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+  wrap.innerHTML = rows;
+}
+
+// ── Render positions ──────────────────────────────────────────────────────────
+function renderPositions(trades) {
+  const wrap = document.getElementById('positions-wrap');
+  document.getElementById('pos-count').textContent = trades.length;
+  document.getElementById('h-open').textContent = trades.length;
+  if (!trades.length) {
+    wrap.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted)">No open positions</div>';
+    return;
+  }
+  const rows = trades.map(t => {
+    const pnlClass = t.unrealizedPL >= 0 ? 'green' : 'red';
+    const dir = t.units > 0 ? 'LONG' : 'SHORT';
+    return `<tr>
+      <td><b>${t.instrument}</b></td>
+      <td><span class="tag tag-${dir.toLowerCase()}">${dir}</span></td>
+      <td>${t.openPrice?.toFixed(5) || '—'}</td>
+      <td class="red">${t.sl?.toFixed(5) || '—'}</td>
+      <td class="green">${t.tp?.toFixed(5) || '—'}</td>
+      <td class="${pnlClass} ">${t.unrealizedPL >= 0 ? '+' : ''}$${t.unrealizedPL?.toFixed(2) || '0'}</td>
+      <td class="muted" style="font-size:10px">${t.openTime?.slice(0,10) || '—'}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<table><thead><tr>
+    <th>Pair</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>P&L</th><th>Opened</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Render regime ─────────────────────────────────────────────────────────────
+function renderRegime(regime) {
+  const wrap = document.getElementById('regime-wrap');
+  if (!regime || !Object.keys(regime).length) return;
+  const entries = Object.entries(regime).map(([inst, r]) => {
+    const cls = r.includes('BULL') ? 'tag-bull' : r.includes('BEAR') ? 'tag-bear' : 'tag-range';
+    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px">${inst}</span>
+      <span class="tag ${cls}" style="font-size:10px">${r}</span>
+    </div>`;
+  }).join('');
+  wrap.innerHTML = entries;
+}
+
+// ── Render calendar ───────────────────────────────────────────────────────────
+function renderCalendar(events) {
+  const wrap = document.getElementById('calendar-wrap');
+  document.getElementById('cal-count').textContent = events.length + ' events';
+  const newsPanel = document.getElementById('news-panel');
+  if (!events.length) {
+    wrap.innerHTML = '<div style="padding:12px;color:var(--muted)">No upcoming events</div>';
+    return;
+  }
+  const rows = events.slice(0, 15).map(e => {
+    const color = e.impact === 'High' ? 'red' : 'yellow';
+    return `<div style="padding:6px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:baseline">
+      <span class="${color}" style="font-size:10px;width:8px">●</span>
+      <span style="flex:1;font-size:11px">${e.currency} — ${e.title}</span>
+      <span class="muted" style="font-size:10px;white-space:nowrap">${e.time || '—'}</span>
+    </div>`;
+  }).join('');
+  wrap.innerHTML = rows;
+  newsPanel.innerHTML = `<div style="font-size:12px">${events.slice(0,20).map(e =>
+    `<div class="feed-item"><span class="${e.impact==='High'?'red':'yellow'}">[${e.impact}]</span> ${e.currency} — ${e.title} @ ${e.time || 'TBD'}</div>`
+  ).join('')}</div>`;
+}
+
+// ── Equity sparkline ──────────────────────────────────────────────────────────
+function drawEquity() {
+  const canvas = document.getElementById('equity-chart');
+  const W = canvas.offsetWidth || 400; const H = 80;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  const data = equityHistory;
+  if (data.length < 2) return;
+  const min = Math.min(...data) * 0.9995;
+  const max = Math.max(...data) * 1.0005;
+  const pts = data.map((v, i) => [i * W / (data.length - 1), H - (v - min) / (max - min) * H]);
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(0,212,255,.2)');
+  grad.addColorStop(1, 'rgba(0,212,255,0)');
+  ctx.beginPath(); ctx.moveTo(pts[0][0], H);
+  pts.forEach(([x,y]) => ctx.lineTo(x,y));
+  ctx.lineTo(pts[pts.length-1][0], H);
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+  ctx.beginPath(); pts.forEach(([x,y],i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y));
+  ctx.strokeStyle = 'var(--cyan)'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// ── Render SMC detail panel ───────────────────────────────────────────────────
+function renderSMCPanel(signals) {
+  const el = document.getElementById('smc-detail-wrap');
+  if (!el) return;
+  const smcSigs = (signals || []).filter(s => s.strategy === 'smc');
+  if (!smcSigs.length) {
+    el.innerHTML = '<div style="color:var(--muted)">No SMC signals in current scan</div>';
+    return;
+  }
+  el.innerHTML = smcSigs.map(s => `
+    <div style="border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:700;color:var(--cyan)">${s.instrument}</span>
+        <span class="tag tag-${s.direction.toLowerCase()}">${s.direction}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10px">
+        <div><span style="color:var(--muted)">Structure:</span> <span style="color:var(--purple)">${s.structure || '—'}</span></div>
+        <div><span style="color:var(--muted)">Entry:</span> <span style="color:var(--yellow)">${s.entryType || '—'}</span></div>
+        <div><span style="color:var(--muted)">Zone:</span> <span style="color:${s.pdZone==='discount'?'var(--green)':'var(--red)'}">${s.pdZone || '—'} (${s.pdPct != null ? (s.pdPct*100).toFixed(0)+'%' : '—'})</span></div>
+        <div><span style="color:var(--muted)">MTF:</span> <span style="color:${s.mtfConfluence>=0.66?'var(--green)':s.mtfConfluence>=0.33?'var(--yellow)':'var(--red)'}">${s.mtfConfluence != null ? (s.mtfConfluence*100).toFixed(0)+'%' : '—'}</span></div>
+        <div><span style="color:var(--muted)">Conf:</span> <span style="color:var(--cyan)">${s.confidence}%</span></div>
+        <div><span style="color:var(--muted)">R:R:</span> <span style="color:var(--green)">${s.rr}</span></div>
+      </div>
+      ${s.smcContext ? `<div style="margin-top:6px;font-size:10px;color:var(--muted)">OBs:${s.smcContext.obs} FVGs:${s.smcContext.fvgs} Pools:${s.smcContext.pools} NearLiq:${s.smcContext.nearLiquidity}</div>` : ''}
+      <div style="margin-top:6px;font-size:10px;color:var(--muted);line-height:1.4">${s.reasoning || ''}</div>
+    </div>
+  `).join('');
+}
+
+// ── Render volatility mini panel ─────────────────────────────────────────────
+function renderVolRegimes(volData) {
+  const el = document.getElementById('vol-regime-mini');
+  if (!el || !volData) return;
+  const colors = { NORMAL: 'var(--muted)', LOW: 'var(--cyan)', HIGH: 'var(--yellow)', EXTREME: 'var(--red)' };
+  el.innerHTML = Object.entries(volData).map(([inst, v]) =>
+    `<span style="color:${colors[v.label]||'var(--muted)'};background:#0a0f1e;border:1px solid var(--border);border-radius:3px;padding:1px 5px">${inst.split('_')[0]}:${v.label[0]}</span>`
+  ).join('');
+}
+
+// ── Main refresh ──────────────────────────────────────────────────────────────
+async function refresh() {
+  try {
+    const [stateRes, posRes, calRes, strRes, riskRes, volRes] = await Promise.allSettled([
+      fetch(`${API}/api/brain/state`).then(r => r.json()),
+      fetch(`${API}/api/brain/positions`).then(r => r.json()),
+      fetch(`${API}/api/news/calendar`).then(r => r.json()),
+      fetch(`${API}/api/brain/strength`).then(r => r.json()),
+      fetch(`${API}/api/brain/risk`).then(r => r.json()),
+      fetch(`${API}/api/brain/volatility`).then(r => r.json()),
+    ]);
+
+    const state   = stateRes.status  === 'fulfilled' ? stateRes.value  : null;
+    const posData = posRes.status    === 'fulfilled' ? posRes.value    : null;
+    const calData = calRes.status    === 'fulfilled' ? calRes.value    : null;
+    const strData = strRes.status    === 'fulfilled' ? strRes.value    : null;
+    const riskData = riskRes.status  === 'fulfilled' ? riskRes.value   : null;
+    const volData  = volRes.status   === 'fulfilled' ? volRes.value    : null;
+
+    if (state?.state) {
+      const s   = state.state;
+      const risk = s.risk || {};
+
+      // Header
+      const acct = s.account;
+      if (acct) {
+        document.getElementById('h-equity').textContent = '$' + acct.balance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        document.getElementById('equity').textContent   = '$' + acct.balance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+        document.getElementById('unrealized').textContent = (acct.unrealizedPL >= 0 ? '+' : '') + acct.unrealizedPL.toFixed(2) + ' unrealized';
+        if (!equityHistory.length || equityHistory[equityHistory.length-1] !== acct.balance) {
+          equityHistory.push(acct.balance);
+          if (equityHistory.length > 200) equityHistory.shift();
+          drawEquity();
+        }
+      }
+
+      // Day P&L
+      const daypnl = risk.dailyRealizedPL || 0;
+      const dpEl = document.getElementById('daypnl');
+      dpEl.textContent = (daypnl >= 0 ? '+' : '') + '$' + Math.abs(daypnl).toFixed(2);
+      dpEl.className = daypnl >= 0 ? 'hero-val green' : 'hero-val red';
+      document.getElementById('h-daypnl').textContent = dpEl.textContent;
+      document.getElementById('h-daypnl').className = dpEl.className.replace('hero-val ','hm-value ');
+      document.getElementById('daily-trades').textContent = (risk.tradesOpenedToday || 0) + ' trades today';
+
+      // Win rate
+      const wr = risk.consecutiveWins || 0;
+      const wl = risk.consecutiveLosses || 0;
+      document.getElementById('winrate').textContent = '—';
+      document.getElementById('wl-count').textContent = `${wr}W streak / ${wl}L streak`;
+
+      // Drawdown
+      const dd = risk.drawdownMode || 'Normal';
+      document.getElementById('dd-mode').textContent = dd + ' mode';
+
+      // Gauges
+      const ddPct = acct ? Math.max(0, (acct.balance > 0 ? (1 - acct.balance / (risk.peakBalance || acct.balance)) * 100 : 0)) : 0;
+      document.getElementById('drawdown').textContent = ddPct.toFixed(2) + '%';
+      document.getElementById('g-dd').style.width = Math.min(ddPct * 5, 100) + '%';
+      document.getElementById('gv-dd').textContent = ddPct.toFixed(1) + '%';
+
+      const openCount = risk.openCount || 0;
+      document.getElementById('g-open').style.width = (openCount / 3 * 100) + '%';
+      document.getElementById('gv-open').textContent = openCount + '/3';
+
+      const dtCount = risk.tradesOpenedToday || 0;
+      document.getElementById('g-dt').style.width = (dtCount / 6 * 100) + '%';
+      document.getElementById('gv-dt').textContent = dtCount + '/6';
+
+      const dpPct = Math.min(Math.abs(daypnl) / 200 * 100, 100);
+      document.getElementById('g-daypnl').style.width = dpPct + '%';
+      document.getElementById('g-daypnl').style.background = daypnl >= 0 ? 'var(--green)' : 'var(--red)';
+      document.getElementById('gv-daypnl').textContent = (daypnl >= 0 ? '+' : '') + '$' + Math.abs(daypnl).toFixed(0);
+      document.getElementById('gv-daypnl').className = 'gauge-val ' + (daypnl >= 0 ? 'green' : 'red');
+
+      // Session
+      document.getElementById('h-session').textContent = (s.sessionInfo || []).join('+') || 'Off';
+
+      // Signals
+      renderSignals(s.signals || []);
+      renderSMCPanel(s.signals || []);
+      renderRegime(s.regime || {});
+    }
+
+    if (posData?.trades) renderPositions(posData.trades);
+    if (calData?.events) renderCalendar(calData.events);
+    if (strData?.strength) renderStrength(strData.strength, strData.ranked);
+    if (volData?.volatility) renderVolRegimes(volData.volatility);
+
+    // Portfolio heat gauge from /api/brain/risk
+    if (riskData?.heat) {
+      const heatPct = riskData.risk?.heat?.totalHeatUsd && state?.state?.account
+        ? (riskData.heat.totalHeatUsd / state.state.account.balance * 100)
+        : 0;
+      document.getElementById('g-heat').style.width = Math.min(heatPct / 3 * 100, 100) + '%';
+      document.getElementById('g-heat').style.background = heatPct > 2.5 ? 'var(--red)' : heatPct > 1.5 ? 'var(--yellow)' : 'var(--purple)';
+      document.getElementById('gv-heat').textContent = heatPct.toFixed(1) + '%';
+      document.getElementById('gv-heat').className = 'gauge-val ' + (heatPct > 2.5 ? 'red' : heatPct > 1.5 ? 'yellow' : 'purple');
+    }
+
+    // Vol regime label in drawdown card
+    if (riskData?.risk?.volRegime) {
+      const vr = riskData.risk.volRegime;
+      const ddModeEl = document.getElementById('dd-mode');
+      if (ddModeEl) ddModeEl.textContent = (riskData.risk.drawdownMode || 'Normal') + ' · Vol:' + vr;
+    }
+
+  } catch (e) {
+    addFeed('Server unreachable — retrying…', 'feed-warn');
+  }
+}
+
+// ── Also fetch fresh scan periodically ────────────────────────────────────────
+async function triggerScan() {
+  try {
+    const r = await fetch(`${API}/api/brain/scan`).then(x => x.json());
+    if (r.signals?.length > 0) addFeed(`Scan complete: ${r.signals.length} signals`, 'feed-scan');
+  } catch {}
+}
+
+// ── Backtest runner ───────────────────────────────────────────────────────────
+async function runBacktest() {
+  const instrument = document.getElementById('bt-instrument').value;
+  const candleCount = parseInt(document.getElementById('bt-candles').value);
+  const el = document.getElementById('bt-results');
+  el.innerHTML = '<div style="color:var(--cyan);text-align:center;padding:16px">Running Monte Carlo backtest… (may take 30–60s)</div>';
+  try {
+    const r = await fetch(`${API}/api/backtest/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instrument, candleCount, mcRuns: 1000 }),
+    }).then(x => x.json());
+
+    if (!r.ok) { el.innerHTML = `<div style="color:var(--red);padding:12px">Error: ${r.error}</div>`; return; }
+
+    const gradeColor = r.grade?.startsWith('A') ? 'var(--green)' : r.grade?.startsWith('B') ? 'var(--cyan)'
+      : r.grade?.startsWith('C') ? 'var(--yellow)' : 'var(--red)';
+    const wfColor = r.walkForward?.verdict === 'ROBUST' ? 'var(--green)' : 'var(--yellow)';
+    const mc = r.monteCarlo || {};
+
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px">
+        <div class="hero" style="padding:10px"><span class="hero-val" style="font-size:16px;color:${gradeColor}">${r.grade?.split('—')[0].trim()}</span><span class="hero-label">Grade</span></div>
+        <div class="hero" style="padding:10px"><span class="hero-val" style="font-size:16px;color:${r.totalPnl>=0?'var(--green)':'var(--red)'}">${r.totalPnl>=0?'+':''}$${r.totalPnl}</span><span class="hero-label">P&L</span></div>
+        <div class="hero" style="padding:10px"><span class="hero-val" style="font-size:16px">${(r.winRate*100).toFixed(1)}%</span><span class="hero-label">Win Rate</span></div>
+        <div class="hero" style="padding:10px"><span class="hero-val" style="font-size:16px;color:var(--cyan)">${r.sharpe}</span><span class="hero-label">Sharpe</span></div>
+        <div class="hero" style="padding:10px"><span class="hero-val" style="font-size:16px;color:var(--red)">${(r.maxDrawdown*100).toFixed(1)}%</span><span class="hero-label">Max DD</span></div>
+        <div class="hero" style="padding:10px"><span class="hero-val" style="font-size:16px;color:var(--yellow)">${r.profitFactor}x</span><span class="hero-label">Profit Factor</span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Monte Carlo (1000 runs)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px">
+            <div><span style="color:var(--muted)">5th pct:</span> <span style="color:${mc.p5>=8000?'var(--green)':'var(--red)'}">$${mc.p5?.toLocaleString()}</span></div>
+            <div><span style="color:var(--muted)">Median:</span> <span style="color:var(--cyan)">$${mc.median?.toLocaleString()}</span></div>
+            <div><span style="color:var(--muted)">95th pct:</span> <span style="color:var(--green)">$${mc.p95?.toLocaleString()}</span></div>
+            <div style="grid-column:span 3"><span style="color:var(--muted)">Worst DD across all runs:</span> <span style="color:var(--red)">${((mc.worstDD||0)*100).toFixed(1)}%</span></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Walk-Forward (70/30 split)</div>
+          <div style="font-size:11px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            <div><span style="color:var(--muted)">IS Win Rate:</span> <span>${((r.walkForward?.inSample?.winRate||0)*100).toFixed(1)}%</span></div>
+            <div><span style="color:var(--muted)">OOS Win Rate:</span> <span>${((r.walkForward?.outOfSample?.winRate||0)*100).toFixed(1)}%</span></div>
+            <div><span style="color:var(--muted)">Degradation:</span> <span style="color:${(r.walkForward?.degradation||0)<0.2?'var(--green)':'var(--red)'}">${((r.walkForward?.degradation||0)*100).toFixed(1)}%</span></div>
+            <div><span style="color:var(--muted)">Verdict:</span> <span style="color:${wfColor}">${r.walkForward?.verdict||'—'}</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:var(--muted)">${r.totalTrades} trades | ${r.wins}W ${r.losses}L | Calmar: ${r.calmar} | ${r.grade}</div>`;
+    addFeed(`Backtest ${instrument}: ${r.grade} | WR:${(r.winRate*100).toFixed(0)}% Sharpe:${r.sharpe} DD:${(r.maxDrawdown*100).toFixed(1)}%`, 'feed-scan');
+  } catch (e) {
+    el.innerHTML = `<div style="color:var(--red);padding:12px">Backtest failed: ${e.message}</div>`;
+  }
+}
+
+refresh();
+triggerScan();
+setInterval(refresh, 5_000);
+setInterval(triggerScan, 60_000);
+window.addEventListener('resize', drawEquity);
+</script>
+</body>
+</html>
