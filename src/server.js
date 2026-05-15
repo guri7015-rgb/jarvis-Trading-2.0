@@ -201,7 +201,17 @@ server.listen(PORT, () => {
 `);
 });
 
-// Auto-scan every 60s
+// Auto-scan + auto-execute every 60s
 setInterval(async () => {
-  try { await fullScan(); } catch { /* logged individually */ }
+  try {
+    const result = await fullScan();
+    if (result?.signals?.length > 0) {
+      const exec = await executeTopSignal();
+      if (exec.executed) {
+        process.stdout.write(`[AUTO] Executed ${exec.instrument} ${exec.direction} ${exec.units}u @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
+      } else if (exec.reason) {
+        process.stdout.write(`[AUTO] No execution: ${exec.reason}\n`);
+      }
+    }
+  } catch (e) { process.stdout.write(`[AUTO] Error: ${e.message}\n`); }
 }, 60_000);

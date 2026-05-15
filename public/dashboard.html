@@ -564,17 +564,39 @@ function renderStrength(strength, ranked) {
 }
 
 // ── Render positions ──────────────────────────────────────────────────────────
+function parseComment(raw) {
+  if (!raw) return { strategy: '—', confidence: '—', reasoning: 'No reason recorded' };
+  const parts = raw.split('|');
+  return {
+    strategy:   parts[0] || '—',
+    confidence: parts[1] || '—',
+    reasoning:  parts.slice(2).join('|') || 'No reason recorded',
+  };
+}
+
+function togglePositionDetail(id) {
+  const el = document.getElementById('pos-detail-' + id);
+  if (!el) return;
+  const visible = el.style.display !== 'none';
+  el.style.display = visible ? 'none' : 'table-row';
+}
+
 function renderPositions(trades) {
   document.getElementById('pos-count').textContent = trades.length;
   document.getElementById('h-open').textContent = trades.length;
 
   const html = !trades.length
     ? '<div style="padding:24px;text-align:center;color:var(--muted)">No open positions</div>'
-    : `<table><thead><tr><th>Pair</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>P&L</th><th>Opened</th></tr></thead><tbody>
+    : `<table><thead><tr>
+        <th>Pair</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>P&L</th><th>Opened</th><th></th>
+      </tr></thead><tbody>
       ${trades.map(t => {
         const dir = t.units > 0 ? 'LONG' : 'SHORT';
         const pnl = t.unrealizedPL || 0;
-        return `<tr>
+        const c   = parseComment(t.clientComment);
+        const rr  = t.sl && t.tp ? Math.abs((t.tp - t.openPrice) / (t.openPrice - t.sl)).toFixed(2) : '—';
+        return `
+        <tr style="cursor:pointer" onclick="togglePositionDetail('${t.id}')">
           <td><b>${t.instrument}</b></td>
           <td><span class="tag tag-${dir.toLowerCase()}">${dir}</span></td>
           <td>${t.openPrice?.toFixed(5)||'—'}</td>
@@ -582,6 +604,24 @@ function renderPositions(trades) {
           <td class="green">${t.tp?.toFixed(5)||'—'}</td>
           <td class="${pnl>=0?'green':'red'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
           <td class="muted">${t.openTime?.slice(0,10)||'—'}</td>
+          <td class="muted" style="font-size:16px;text-align:center">▸</td>
+        </tr>
+        <tr id="pos-detail-${t.id}" style="display:none;background:linear-gradient(135deg,#f5f7ff,#ede9fe)">
+          <td colspan="8" style="padding:16px 20px">
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 20px;align-items:start">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Strategy</span>
+              <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--primary)">${c.strategy.toUpperCase()}</span>
+
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Confidence</span>
+              <span style="font-family:var(--mono);font-size:12px;font-weight:600">${c.confidence}</span>
+
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">R:R</span>
+              <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--green)">${rr}R</span>
+
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Reason</span>
+              <span style="font-size:12px;line-height:1.5;color:var(--text)">${c.reasoning}</span>
+            </div>
+          </td>
         </tr>`;
       }).join('')}</tbody></table>`;
 

@@ -60,8 +60,8 @@ export const CONFIG = {
   candleCount:       150,
 
   // Strategy thresholds
-  minConfidence:     65,
-  minRR:             1.8,
+  minConfidence:     60,
+  minRR:             1.6,
   atrSlMult:         1.5,
   atrTpMult:         3.0,
 
@@ -89,8 +89,8 @@ export const CONFIG = {
   lossStreakRisk:        0.005,   // 0.5% after 2 losses
   winStreakThreshold:    3,
   lossStreakThreshold:   2,
-  maxOpenPositions:      3,
-  maxDailyTrades:        6,
+  maxOpenPositions:      5,
+  maxDailyTrades:        10,
   dailyLossLimit:        100,     // USD
   dailyProfitTarget:     200,     // USD — lock gains
   maxConsecutiveLosses:  3,

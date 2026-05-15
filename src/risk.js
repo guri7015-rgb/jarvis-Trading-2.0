@@ -119,7 +119,7 @@ export function canTrade(balance, instrument, spread, normalSpread, candles) {
   const group = CORRELATION_GROUPS.find((g) => g.includes(instrument));
   if (group) {
     const collision = state.openInstruments.filter((i) => group.includes(i));
-    if (collision.length >= 1)
+    if (collision.length >= 2)
       return { ok: false, reason: `Correlation block: already holding ${collision.join(", ")}` };
   }
 
