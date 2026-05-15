@@ -100,8 +100,8 @@ async function router(req, res) {
 
   if (url.pathname === "/api/brain/strength") {
     try {
-      const candles = await getMultiCandles(INSTRUMENTS, "H1", 30);
-      const strength = calcStrength(candles);
+      const candles = await getMultiCandles(INSTRUMENTS, "H1", CONFIG.strengthLookback + 2);
+      const strength = calcStrength(candles, CONFIG.strengthLookback);
       json(res, 200, { strength, ranked: rankCurrencies(strength) });
     } catch (e) { json(res, 500, { error: e.message }); }
     return;

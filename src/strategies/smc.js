@@ -14,6 +14,8 @@
  * already happened.
  */
 
+import { CONFIG } from '../config.js';
+
 // ── Swing structure ───────────────────────────────────────────────────────────
 export function findSwings(candles, strength = 3) {
   const highs = [];
@@ -313,9 +315,10 @@ export function smcSignal(instrument, candles, atr) {
   if (!entryZone) return null;
 
   const direction = bullBias ? 'LONG' : 'SHORT';
+  // LONG: enter near bottom of zone (cheaper fill); SHORT: near top (better short entry)
   const entryPrice = direction === 'LONG'
-    ? (entryZone.top + entryZone.bottom) / 2      // mid of OB/FVG
-    : (entryZone.top + entryZone.bottom) / 2;
+    ? entryZone.bottom + (entryZone.top - entryZone.bottom) * 0.25
+    : entryZone.top    - (entryZone.top - entryZone.bottom) * 0.25;
 
   const sl = direction === 'LONG'
     ? entryZone.low || entryZone.bottom - atr * 0.3   // below OB
@@ -328,7 +331,7 @@ export function smcSignal(instrument, candles, atr) {
   const risk   = Math.abs(entryPrice - sl);
   const reward = Math.abs(tp - entryPrice);
   const rr     = risk > 0 ? +(reward / risk).toFixed(2) : 0;
-  if (rr < 2.0) return null;
+  if (rr < CONFIG.minRR) return null;
 
   // Nearby liquidity that could stop us out
   const nearLiquidity = pools.filter(p => {

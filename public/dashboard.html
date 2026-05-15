@@ -273,6 +273,13 @@ canvas{display:block;width:100%}
         <div class="card-body"><canvas id="equity-chart" style="height:90px"></canvas></div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-hdr"><span><span class="pulse"></span>Activity Feed</span><span class="muted" style="font-size:10px">auto-updates</span></div>
+      <div class="card-body" id="activity-panel" style="max-height:180px;overflow-y:auto;font-size:11px">
+        <div class="feed-item feed-scan">Bot started — monitoring markets…</div>
+      </div>
+    </div>
   </div>
 
   <!-- ══ PAGE: Signals ══ -->
@@ -369,7 +376,7 @@ canvas{display:block;width:100%}
           <div class="gauge-row">
             <span class="gauge-label">Open Trades</span>
             <div class="gauge-track"><div class="gauge-fill" id="g-open" style="width:0%;background:var(--grad1)"></div></div>
-            <span class="gauge-val purple" id="gv-open">0/3</span>
+            <span class="gauge-val purple" id="gv-open">0/5</span>
           </div>
           <div class="gauge-row">
             <span class="gauge-label">Drawdown</span>
@@ -379,7 +386,7 @@ canvas{display:block;width:100%}
           <div class="gauge-row">
             <span class="gauge-label">Daily Trades</span>
             <div class="gauge-track"><div class="gauge-fill" id="g-dt" style="width:0%;background:var(--grad3)"></div></div>
-            <span class="gauge-val yellow" id="gv-dt">0/6</span>
+            <span class="gauge-val yellow" id="gv-dt">0/10</span>
           </div>
           <div class="gauge-row">
             <span class="gauge-label">Port. Heat</span>
@@ -462,7 +469,7 @@ function addFeed(msg, cls = 'feed-scan') {
 }
 
 function renderFeedAll() {
-  const containers = ['activity-panel-header', 'activity-feed-page'];
+  const containers = ['activity-panel', 'activity-feed-page'];
   for (const id of containers) {
     const el = document.getElementById(id);
     if (!el) continue;
@@ -822,14 +829,14 @@ async function refresh() {
     // ── Gauges ──
     const ddPct = acct&&risk.peakBalance>0 ? Math.max(0,(1-acct.balance/risk.peakBalance)*100) : 0;
     document.getElementById('drawdown').textContent=ddPct.toFixed(2)+'%';
-    document.getElementById('g-dd').style.width=Math.min(ddPct*5,100)+'%';
+    document.getElementById('g-dd').style.width=Math.min(ddPct*12.5,100)+'%';  // 8% DD = 100%
     document.getElementById('gv-dd').textContent=ddPct.toFixed(1)+'%';
     const oc = risk.openCount||0;
-    document.getElementById('g-open').style.width=(oc/3*100)+'%';
-    document.getElementById('gv-open').textContent=oc+'/3';
+    document.getElementById('g-open').style.width=(oc/5*100)+'%';
+    document.getElementById('gv-open').textContent=oc+'/5';
     const dtc = risk.tradesOpenedToday||0;
-    document.getElementById('g-dt').style.width=(dtc/6*100)+'%';
-    document.getElementById('gv-dt').textContent=dtc+'/6';
+    document.getElementById('g-dt').style.width=(dtc/10*100)+'%';
+    document.getElementById('gv-dt').textContent=dtc+'/10';
     const dpPct=Math.min(Math.abs(daypnl)/200*100,100);
     document.getElementById('g-daypnl').style.width=dpPct+'%';
     document.getElementById('gv-daypnl').textContent=(daypnl>=0?'+':'')+' $'+Math.abs(daypnl).toFixed(0);
@@ -868,12 +875,18 @@ async function runBacktest() {
   const el = document.getElementById('bt-results');
   el.innerHTML = '<div style="text-align:center;color:var(--primary);padding:40px;font-weight:600">Running Monte Carlo (1000 simulations)… may take 30–60s</div>';
   try {
-    const r = await fetch(`${API}/api/backtest/run`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({instrument,candleCount,mcRuns:1000}),
-    }).then(x=>x.json());
+    let r;
+    try {
+      r = await fetch(`${API}/api/backtest/run`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({instrument,candleCount,mcRuns:1000}),
+      }).then(x=>x.json());
+    } catch(fetchErr) {
+      el.innerHTML=`<div style="color:var(--red);padding:24px">Network error: ${fetchErr.message}</div>`;
+      return;
+    }
 
-    if (!r.ok) { el.innerHTML=`<div style="color:var(--red);padding:24px">Error: ${r.error}</div>`; return; }
+    if (!r.ok) { el.innerHTML=`<div style="color:var(--red);padding:24px">Error: ${r.error||JSON.stringify(r)}</div>`; return; }
     const gc = r.grade?.startsWith('A')?'var(--green)':r.grade?.startsWith('B')?'var(--blue)':r.grade?.startsWith('C')?'var(--yellow)':'var(--red)';
     const mc = r.monteCarlo||{};
     const wf = r.walkForward||{};
@@ -920,9 +933,23 @@ async function triggerScan() {
   } catch {}
 }
 
+// ── Auto-refresh with backoff ─────────────────────────────────────────────────
+let _refreshFails = 0;
+async function safeRefresh() {
+  try {
+    await refresh();
+    _refreshFails = 0;
+  } catch {
+    _refreshFails++;
+  }
+  // Backoff: 5s normal, up to 30s if server is down
+  const delay = Math.min(5000 * Math.pow(1.5, _refreshFails), 30_000);
+  setTimeout(safeRefresh, delay);
+}
+
 refresh();
 triggerScan();
-setInterval(refresh, 5_000);
+safeRefresh();
 setInterval(triggerScan, 60_000);
 window.addEventListener('resize', drawEquity);
 </script>

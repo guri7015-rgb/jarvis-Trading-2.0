@@ -1,7 +1,7 @@
 import https from "https";
 import { OANDA_HOST, OANDA_KEY, OANDA_ACCT, PRICE_DECIMALS } from "./config.js";
 
-function request(method, path, body = null) {
+function request(method, path, body = null, timeoutMs = 15_000) {
   return new Promise((resolve, reject) => {
     const req = https.request(
       { hostname: OANDA_HOST, path, method,
@@ -18,6 +18,7 @@ function request(method, path, body = null) {
         });
       },
     );
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error(`OANDA request timed out (${method} ${path})`)); });
     req.on("error", reject);
     if (body) req.write(JSON.stringify(body));
     req.end();
@@ -30,18 +31,22 @@ const put   = (p, b) => request("PUT",   p, b);
 
 // ── Candles ───────────────────────────────────────────────────────────────────
 export async function getCandles(instrument, granularity = "H1", count = 150) {
-  const data = await get(`/v3/instruments/${instrument}/candles?count=${count}&granularity=${granularity}&price=BA`);
-  return (data.candles || []).filter((c) => c.complete).map((c) => ({
-    time:   parseInt(c.time),
-    open:   (parseFloat(c.mid?.o || c.ask?.o)),
-    high:   (parseFloat(c.mid?.h || c.ask?.h)),
-    low:    (parseFloat(c.mid?.l || c.bid?.l)),
-    close:  (parseFloat(c.mid?.c || c.ask?.c)),
-    bid:    c.bid ? parseFloat(c.bid.c) : null,
-    ask:    c.ask ? parseFloat(c.ask.c) : null,
-    spread: c.bid && c.ask ? parseFloat(c.ask.c) - parseFloat(c.bid.c) : null,
-    volume: parseInt(c.volume),
-  }));
+  const data = await get(`/v3/instruments/${instrument}/candles?count=${count}&granularity=${granularity}&price=MBA`);
+  return (data.candles || []).filter((c) => c.complete).map((c) => {
+    // Use mid prices for clean OHLC; fall back to bid/ask average if mid absent
+    const mid = (f, b, a) => c.mid ? parseFloat(c.mid[f]) : (parseFloat(c.bid?.[b] || 0) + parseFloat(c.ask?.[a] || 0)) / 2;
+    return {
+      time:   parseInt(c.time),
+      open:   mid('o','o','o'),
+      high:   mid('h','h','h'),
+      low:    mid('l','l','l'),
+      close:  mid('c','c','c'),
+      bid:    c.bid ? parseFloat(c.bid.c) : null,
+      ask:    c.ask ? parseFloat(c.ask.c) : null,
+      spread: c.bid && c.ask ? parseFloat(c.ask.c) - parseFloat(c.bid.c) : null,
+      volume: parseInt(c.volume),
+    };
+  });
 }
 
 export async function getMultiCandles(instruments, granularity, count) {

@@ -123,6 +123,17 @@ export async function fullScan() {
       try {
         const acct = await getAccountSummary();
         initRisk(acct.balance);
+        // Reconcile any open positions from before this process started
+        try {
+          const openTrades = await getOpenTrades();
+          for (const t of openTrades) {
+            const riskEst = acct.balance * 0.01;  // assume 1% risk per existing trade
+            onTradeOpened(t.instrument, t.id, riskEst);
+            _lastClosedIds.add(t.id);  // prevent double-counting if closed later
+          }
+          if (openTrades.length)
+            process.stdout.write(`[INIT] Reconciled ${openTrades.length} existing open trade(s)\n`);
+        } catch { /* non-critical */ }
         _initialized = true;
       } catch { initRisk(10_000); _initialized = true; }
     }
@@ -187,7 +198,7 @@ export async function fullScan() {
 
       // Multi-timeframe confluence boost
       const confluence = mtfConfluence(enrichedD1, enrichedH4, enrichedH1, signal.direction);
-      if (confluence < 0.34) {
+      if (confluence < CONFIG.mtfMinConfluence) {
         errors.push({ instrument, reason: `MTF confluence too low (${(confluence * 100).toFixed(0)}%) for ${signal.direction}` });
         continue;
       }
@@ -281,7 +292,12 @@ export async function executeTopSignal() {
   if (units === 0) return { executed: false, reason: 'Position size = 0 (heat cap, drawdown mode, or extreme vol)' };
 
   // News evaluation
-  const newsResult = await evaluateSignal(signal);
+  let newsResult = { decision: 'APPROVE', sizeMult: 1.0, reasoning: 'News check skipped' };
+  try {
+    newsResult = await evaluateSignal(signal);
+  } catch (e) {
+    process.stdout.write(`[NEWS] Error evaluating signal: ${e.message} — proceeding with APPROVE\n`);
+  }
   if (newsResult.decision === 'SKIP')
     return { executed: false, reason: `News veto: ${newsResult.reasoning}` };
 
@@ -317,10 +333,19 @@ export async function executeTopSignal() {
     return { executed: false, reason: `Order failed: ${e.message}` };
   }
 
-  // Register trade for partial TP management
-  const tradeId = orderResult?.orderFillTransaction?.tradeOpened?.tradeID
-                || orderResult?.relatedTransactionIDs?.[0]
-                || String(Date.now());
+  // Validate the order actually filled
+  const fillTx = orderResult?.orderFillTransaction;
+  const limitTx = orderResult?.orderCreateTransaction;
+  if (!fillTx && !limitTx) {
+    const rejection = orderResult?.orderRejectTransaction || orderResult?.errorMessage || JSON.stringify(orderResult).slice(0, 200);
+    return { executed: false, reason: `Order rejected by broker: ${rejection}` };
+  }
+
+  const tradeId = fillTx?.tradeOpened?.tradeID
+               || fillTx?.tradeID
+               || limitTx?.id
+               || orderResult?.relatedTransactionIDs?.[0]
+               || String(Date.now());
 
   const riskUsd = account.balance * currentRiskPct() * (sizeMult || 1);
   onTradeOpened(signal.instrument, tradeId, riskUsd);

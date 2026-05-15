@@ -234,12 +234,13 @@ export function runStrategies(instrument, enriched, candleMap, regime) {
     const s = breakout(instrument, enriched); if (s) signals.push(s);
   }
   if (instrument === "XAU_USD" && allowed.length > 0) {
-    const goldEnriched = enriched;
-    const usdJpyC = candleMap["USD_JPY"];
-    if (usdJpyC) {
-      const s = goldDivergence(goldEnriched, enrich(usdJpyC), candleMap);
-      if (s) signals.push(s);
-    }
+    try {
+      const usdJpyC = candleMap["USD_JPY"];
+      if (usdJpyC && usdJpyC.length >= 30) {
+        const s = goldDivergence(enriched, enrich(usdJpyC), candleMap);
+        if (s) signals.push(s);
+      }
+    } catch { /* non-critical */ }
   }
 
   // Strategy 6: SMC — always runs, strongest when structure aligns with regime

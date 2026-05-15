@@ -60,6 +60,7 @@ function refreshDay(balance) {
 }
 
 function applyDrawdownMode(balance) {
+  if (balance > state.peakBalance) state.peakBalance = balance;
   const dd = state.peakBalance > 0 ? (state.peakBalance - balance) / state.peakBalance : 0;
   const mode = CONFIG.drawdownModes.slice().reverse().find((m) => dd >= m.pct);
   state.drawdownMode = mode || null;
@@ -176,7 +177,6 @@ export function onTradeClosed(instrument, pnl) {
   state.dailyRealizedPL += pnl;
   if (pnl > 0) { state.consecutiveWins++; state.consecutiveLosses = 0; }
   else         { state.consecutiveLosses++; state.consecutiveWins = 0; }
-  if (pnl + state.initialBalance > state.peakBalance) state.peakBalance = pnl + state.initialBalance;
 
   const tradeId = state.openTradeIds[instrument];
   if (tradeId) {

@@ -48,17 +48,21 @@ export async function fetchEconomicCalendar() {
 
     _calendarCache = raw
       .filter((e) => e.impact === "High" || e.impact === "Medium")
-      .map((e) => ({
-        title:     e.title,
-        currency:  e.country?.toUpperCase() || "???",
-        impact:    e.impact,
-        date:      e.date,
-        time:      e.time || "All Day",
-        actual:    e.actual || null,
-        forecast:  e.forecast || "—",
-        previous:  e.previous || "—",
-        timestamp: e.date && e.time ? new Date(`${e.date} ${e.time} GMT`).getTime() : null,
-      }))
+      .map((e) => {
+        const timeStr = e.time && e.time !== "All Day" ? e.time : "12:00am";
+        const ts = e.date ? new Date(`${e.date} ${timeStr} GMT`).getTime() : null;
+        return {
+          title:     e.title,
+          currency:  e.country?.toUpperCase() || "???",
+          impact:    e.impact,
+          date:      e.date,
+          time:      e.time || "All Day",
+          actual:    e.actual || null,
+          forecast:  e.forecast || "—",
+          previous:  e.previous || "—",
+          timestamp: ts && !isNaN(ts) ? ts : null,
+        };
+      })
       .filter((e) => e.timestamp)
       .sort((a, b) => a.timestamp - b.timestamp);
     _calendarFetched = Date.now();

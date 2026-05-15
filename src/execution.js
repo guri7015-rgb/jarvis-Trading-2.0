@@ -101,7 +101,7 @@ export async function setupPartialTP(tradeId, instrument, direction, entry, sl) 
   const risk     = Math.abs(entry - sl);
   const tp1      = direction === 'LONG' ? entry + risk       : entry - risk;
   const tp2      = direction === 'LONG' ? entry + risk * 2.5 : entry - risk * 2.5;
-  const breakeven = direction === 'LONG' ? entry + risk * 0.1 : entry - risk * 0.1;
+  const breakeven = direction === 'LONG' ? entry + risk * 0.05 : entry - risk * 0.05;  // tiny buffer above entry
 
   // Update trade: move SL to near-breakeven after TP1
   // OANDA doesn't natively support partial TPs, so we track this manually

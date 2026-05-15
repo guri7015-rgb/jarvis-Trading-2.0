@@ -29,7 +29,10 @@ export function atrPercentile(candles, lookback = 100) {
 
   const current = atrs[atrs.length - 1];
   const sorted  = [...atrs].sort((a, b) => a - b);
-  const rank    = sorted.filter(v => v <= current).length;
+  // Count strictly less than current to avoid inflating percentile when values repeat
+  const below = sorted.filter(v => v < current).length;
+  const equal = sorted.filter(v => v === current).length;
+  const rank  = below + equal * 0.5;  // rank duplicates at their midpoint
 
   return Math.round((rank / sorted.length) * 100);
 }
