@@ -146,7 +146,7 @@ Respond ONLY with JSON (no extra text):
 {"decision": "APPROVE" | "REDUCE" | "SKIP", "sizeMult": 1.0 | 0.5 | 0.25, "reasoning": "<1 sentence>"}`;
 
   try {
-    const { default: Anthropic } = await import("anthropic");
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: ANTHROPIC_KEY });
     const msg = await Promise.race([
       client.messages.create({

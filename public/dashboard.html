@@ -129,7 +129,7 @@ canvas{display:block;width:100%}
     <div class="hm"><span class="hm-label">Open</span><span class="hm-value" id="h-open">—</span></div>
     <div class="hm"><span class="hm-label">Signals</span><span class="hm-value cyan" id="h-signals">—</span></div>
     <div class="hm"><span class="hm-label">Session</span><span class="hm-value" id="h-session">—</span></div>
-    <div class="hm"><span class="hm-label">Mode</span><span id="mode-badge" class="badge badge-ro">READ ONLY</span></div>
+    <div class="hm"><span class="hm-label">Mode</span><span id="mode-badge" class="badge badge-ro">…</span></div>
   </div>
 
   <span id="clock" style="margin-left:auto"></span>
@@ -139,28 +139,28 @@ canvas{display:block;width:100%}
 <!-- Sidebar -->
 <nav class="sidebar">
   <div class="nav-section">Mission Control</div>
-  <div class="nav-item active"><span class="icon">⊞</span> Dashboard</div>
-  <div class="nav-item"><span class="icon">🧠</span> Brain</div>
+  <div class="nav-item active" onclick="navTo('section-hero',this)"><span class="icon">⊞</span> Dashboard</div>
+  <div class="nav-item" onclick="navTo('section-positions',this)"><span class="icon">🧠</span> Brain</div>
   <div class="nav-section">Markets</div>
-  <div class="nav-item"><span class="icon">📊</span> Signals</div>
-  <div class="nav-item"><span class="icon">💱</span> Strength</div>
-  <div class="nav-item"><span class="icon">🌐</span> Regime</div>
+  <div class="nav-item" onclick="navTo('section-signals',this)"><span class="icon">📊</span> Signals</div>
+  <div class="nav-item" onclick="navTo('section-strength',this)"><span class="icon">💱</span> Strength</div>
+  <div class="nav-item" onclick="navTo('section-regime',this)"><span class="icon">🌐</span> Regime</div>
   <div class="nav-section">Intelligence</div>
-  <div class="nav-item"><span class="icon">📰</span> News & Calendar</div>
-  <div class="nav-item"><span class="icon">📈</span> Backtest</div>
+  <div class="nav-item" onclick="navTo('section-calendar',this)"><span class="icon">📰</span> News & Calendar</div>
+  <div class="nav-item" onclick="navTo('section-backtest',this)"><span class="icon">📈</span> Backtest</div>
   <div class="nav-section">Risk</div>
-  <div class="nav-item"><span class="icon">🛡️</span> Risk Manager</div>
-  <div class="nav-item"><span class="icon">📋</span> Trade Journal</div>
+  <div class="nav-item" onclick="navTo('section-risk',this)"><span class="icon">🛡️</span> Risk Manager</div>
+  <div class="nav-item" onclick="navTo('section-positions',this)"><span class="icon">📋</span> Trade Journal</div>
   <div class="nav-section">System</div>
-  <div class="nav-item"><span class="icon">⚙️</span> Settings</div>
-  <div class="nav-item"><span class="icon">🔌</span> Broker</div>
+  <div class="nav-item" onclick="navTo('section-hero',this)"><span class="icon">⚙️</span> Settings</div>
+  <div class="nav-item" onclick="navTo('section-hero',this)"><span class="icon">🔌</span> Broker</div>
 </nav>
 
 <!-- Main content -->
 <main id="main">
 
   <!-- Row 1: Hero metrics -->
-  <div class="grid4">
+  <div class="grid4" id="section-hero">
     <div class="card"><div class="hero">
       <span class="hero-val cyan" id="equity">$0.00</span>
       <span class="hero-label">Equity / NAV</span>
@@ -184,7 +184,7 @@ canvas{display:block;width:100%}
   </div>
 
   <!-- Row 2: Signals + Strength + Regime -->
-  <div class="grid2">
+  <div class="grid2" id="section-signals">
     <!-- Signals table -->
     <div class="card">
       <div class="card-hdr">
@@ -197,7 +197,7 @@ canvas{display:block;width:100%}
     </div>
 
     <!-- Currency Strength -->
-    <div class="card">
+    <div class="card" id="section-strength">
       <div class="card-hdr"><span>Currency Strength</span><span class="muted" id="strength-updated">—</span></div>
       <div class="card-body" id="strength-wrap">
         <div style="color:var(--muted)">Loading…</div>
@@ -206,7 +206,7 @@ canvas{display:block;width:100%}
   </div>
 
   <!-- Row 3: Open Positions + Regime + Risk -->
-  <div class="grid3">
+  <div class="grid3" id="section-positions">
     <!-- Open Positions -->
     <div class="card" style="grid-column:span 2">
       <div class="card-hdr"><span>Open Positions</span><span id="pos-count" class="cyan">0</span></div>
@@ -217,13 +217,13 @@ canvas{display:block;width:100%}
 
     <!-- Regime + Risk -->
     <div style="display:flex;flex-direction:column;gap:12px">
-      <div class="card">
+      <div class="card" id="section-regime">
         <div class="card-hdr">Market Regime</div>
         <div class="card-body" id="regime-wrap">
           <div style="color:var(--muted)">—</div>
         </div>
       </div>
-      <div class="card">
+      <div class="card" id="section-risk">
         <div class="card-hdr">Risk Status</div>
         <div class="card-body">
           <div class="gauge-row">
@@ -261,7 +261,7 @@ canvas{display:block;width:100%}
   </div>
 
   <!-- Row 4: Equity chart + Economic calendar -->
-  <div class="grid2">
+  <div class="grid2" id="section-calendar">
     <div class="card">
       <div class="card-hdr">Equity Curve</div>
       <div class="card-body"><canvas id="equity-chart" style="height:80px"></canvas></div>
@@ -275,7 +275,7 @@ canvas{display:block;width:100%}
   </div>
 
   <!-- Row 5: Backtest panel -->
-  <div class="card">
+  <div class="card" id="section-backtest">
     <div class="card-hdr">
       <span>Backtest Engine — Monte Carlo + Walk-Forward</span>
       <div style="display:flex;gap:8px;align-items:center">
@@ -323,6 +323,16 @@ let _lastSignalCount = 0;
 setInterval(() => {
   document.getElementById('clock').textContent = new Date().toUTCString().replace(' GMT',' UTC');
 }, 1000);
+
+// ── Sidebar nav ───────────────────────────────────────────────────────────────
+function navTo(sectionId, el) {
+  // Update active state on the clicked nav item
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  // Scroll target section into view inside main
+  const target = document.getElementById(sectionId);
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 // ── Tab switcher ──────────────────────────────────────────────────────────────
 function switchTab(el, id) {
@@ -533,41 +543,72 @@ function renderVolRegimes(volData) {
   ).join('');
 }
 
+// ── Update mode badge from config ──────────────────────────────────────────────
+function updateModeBadge(config) {
+  const badge = document.getElementById('mode-badge');
+  if (!badge) return;
+  // config.READ_ONLY is a boolean — server exports it from JARVIS_READ_ONLY env
+  const isReadOnly = config?.READ_ONLY === true;
+  const isDemoEnabled = config?.DEMO_ENABLED === true;
+  if (isReadOnly) {
+    badge.className = 'badge badge-ro';
+    badge.textContent = 'READ ONLY';
+  } else if (isDemoEnabled) {
+    badge.className = 'badge badge-demo';
+    badge.textContent = 'DEMO LIVE';
+  } else {
+    badge.className = 'badge badge-live';
+    badge.textContent = 'LIVE';
+  }
+}
+
+// ── Update equity display (shared helper) ─────────────────────────────────────
+function updateEquityDisplay(acct) {
+  if (!acct || acct.balance == null) return;
+  const fmt = v => '$' + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('h-equity').textContent = fmt(acct.nav ?? acct.balance);
+  document.getElementById('equity').textContent   = fmt(acct.nav ?? acct.balance);
+  const upl = acct.unrealizedPL ?? 0;
+  document.getElementById('unrealized').textContent = (upl >= 0 ? '+' : '') + upl.toFixed(2) + ' unrealized';
+  const bal = acct.balance;
+  if (!equityHistory.length || equityHistory[equityHistory.length-1] !== bal) {
+    equityHistory.push(bal);
+    if (equityHistory.length > 200) equityHistory.shift();
+    drawEquity();
+  }
+}
+
 // ── Main refresh ──────────────────────────────────────────────────────────────
 async function refresh() {
   try {
-    const [stateRes, posRes, calRes, strRes, riskRes, volRes] = await Promise.allSettled([
+    const [stateRes, posRes, calRes, strRes, riskRes, acctRes] = await Promise.allSettled([
       fetch(`${API}/api/brain/state`).then(r => r.json()),
       fetch(`${API}/api/brain/positions`).then(r => r.json()),
       fetch(`${API}/api/news/calendar`).then(r => r.json()),
       fetch(`${API}/api/brain/strength`).then(r => r.json()),
       fetch(`${API}/api/brain/risk`).then(r => r.json()),
-      fetch(`${API}/api/brain/volatility`).then(r => r.json()),
+      fetch(`${API}/api/brain/account`).then(r => r.json()),
     ]);
 
-    const state   = stateRes.status  === 'fulfilled' ? stateRes.value  : null;
-    const posData = posRes.status    === 'fulfilled' ? posRes.value    : null;
-    const calData = calRes.status    === 'fulfilled' ? calRes.value    : null;
-    const strData = strRes.status    === 'fulfilled' ? strRes.value    : null;
-    const riskData = riskRes.status  === 'fulfilled' ? riskRes.value   : null;
-    const volData  = volRes.status   === 'fulfilled' ? volRes.value    : null;
+    const state    = stateRes.status  === 'fulfilled' ? stateRes.value  : null;
+    const posData  = posRes.status    === 'fulfilled' ? posRes.value    : null;
+    const calData  = calRes.status    === 'fulfilled' ? calRes.value    : null;
+    const strData  = strRes.status    === 'fulfilled' ? strRes.value    : null;
+    const riskData = riskRes.status   === 'fulfilled' ? riskRes.value   : null;
+    const acctData = acctRes.status   === 'fulfilled' ? acctRes.value   : null;
+
+    // ── Mode badge from server config ─────────────────────────────────────────
+    if (state?.config) updateModeBadge(state.config);
+
+    // ── Account / Equity — prefer direct /api/brain/account over stale state ──
+    // acctData is the direct OANDA response; state.state.account is from last scan
+    const liveAcct = (acctData && acctData.balance != null) ? acctData
+                   : state?.state?.account || null;
+    if (liveAcct) updateEquityDisplay(liveAcct);
 
     if (state?.state) {
-      const s   = state.state;
+      const s    = state.state;
       const risk = s.risk || {};
-
-      // Header
-      const acct = s.account;
-      if (acct) {
-        document.getElementById('h-equity').textContent = '$' + acct.balance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-        document.getElementById('equity').textContent   = '$' + acct.balance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-        document.getElementById('unrealized').textContent = (acct.unrealizedPL >= 0 ? '+' : '') + acct.unrealizedPL.toFixed(2) + ' unrealized';
-        if (!equityHistory.length || equityHistory[equityHistory.length-1] !== acct.balance) {
-          equityHistory.push(acct.balance);
-          if (equityHistory.length > 200) equityHistory.shift();
-          drawEquity();
-        }
-      }
 
       // Day P&L
       const daypnl = risk.dailyRealizedPL || 0;
@@ -579,29 +620,35 @@ async function refresh() {
       document.getElementById('daily-trades').textContent = (risk.tradesOpenedToday || 0) + ' trades today';
 
       // Win rate
-      const wr = risk.consecutiveWins || 0;
-      const wl = risk.consecutiveLosses || 0;
+      const cw = risk.consecutiveWins || 0;
+      const cl = risk.consecutiveLosses || 0;
       document.getElementById('winrate').textContent = '—';
-      document.getElementById('wl-count').textContent = `${wr}W streak / ${wl}L streak`;
+      document.getElementById('wl-count').textContent = `${cw}W streak / ${cl}L streak`;
 
-      // Drawdown
-      const dd = risk.drawdownMode || 'Normal';
-      document.getElementById('dd-mode').textContent = dd + ' mode';
-
-      // Gauges
-      const ddPct = acct ? Math.max(0, (acct.balance > 0 ? (1 - acct.balance / (risk.peakBalance || acct.balance)) * 100 : 0)) : 0;
+      // Drawdown — use riskData if available for fresh peakBalance
+      const peakBal = riskData?.risk?.peakBalance || risk.peakBalance || liveAcct?.balance || 0;
+      const curBal  = liveAcct?.balance || 0;
+      const ddPct   = peakBal > 0 && curBal > 0 ? Math.max(0, (1 - curBal / peakBal) * 100) : 0;
       document.getElementById('drawdown').textContent = ddPct.toFixed(2) + '%';
       document.getElementById('g-dd').style.width = Math.min(ddPct * 5, 100) + '%';
       document.getElementById('gv-dd').textContent = ddPct.toFixed(1) + '%';
 
-      const openCount = risk.openCount || 0;
-      document.getElementById('g-open').style.width = (openCount / 3 * 100) + '%';
+      // Drawdown mode + vol regime label
+      const ddMode = riskData?.risk?.drawdownMode || risk.drawdownMode || 'Normal';
+      const volReg = riskData?.risk?.volRegime || '';
+      document.getElementById('dd-mode').textContent = ddMode + ' mode' + (volReg ? ' · Vol:' + volReg : '');
+
+      // Open positions gauge
+      const openCount = riskData?.risk?.openCount ?? risk.openCount ?? 0;
+      document.getElementById('g-open').style.width = Math.min(openCount / 3 * 100, 100) + '%';
       document.getElementById('gv-open').textContent = openCount + '/3';
 
-      const dtCount = risk.tradesOpenedToday || 0;
-      document.getElementById('g-dt').style.width = (dtCount / 6 * 100) + '%';
+      // Daily trades gauge
+      const dtCount = riskData?.risk?.tradesOpenedToday ?? risk.tradesOpenedToday ?? 0;
+      document.getElementById('g-dt').style.width = Math.min(dtCount / 6 * 100, 100) + '%';
       document.getElementById('gv-dt').textContent = dtCount + '/6';
 
+      // Day P&L gauge
       const dpPct = Math.min(Math.abs(daypnl) / 200 * 100, 100);
       document.getElementById('g-daypnl').style.width = dpPct + '%';
       document.getElementById('g-daypnl').style.background = daypnl >= 0 ? 'var(--green)' : 'var(--red)';
@@ -620,24 +667,18 @@ async function refresh() {
     if (posData?.trades) renderPositions(posData.trades);
     if (calData?.events) renderCalendar(calData.events);
     if (strData?.strength) renderStrength(strData.strength, strData.ranked);
-    if (volData?.volatility) renderVolRegimes(volData.volatility);
 
-    // Portfolio heat gauge from /api/brain/risk
+    // ── Portfolio heat gauge — riskData.heat has totalHeatUsd ─────────────────
+    // Server returns { risk: getRiskState(), heat: getHeatState() }
+    // getRiskState() also includes heat inside it, but riskData.heat is the canonical source
     if (riskData?.heat) {
-      const heatPct = riskData.risk?.heat?.totalHeatUsd && state?.state?.account
-        ? (riskData.heat.totalHeatUsd / state.state.account.balance * 100)
-        : 0;
+      const totalHeat = riskData.heat.totalHeatUsd ?? 0;
+      const balForHeat = liveAcct?.balance || 1;
+      const heatPct = totalHeat / balForHeat * 100;
       document.getElementById('g-heat').style.width = Math.min(heatPct / 3 * 100, 100) + '%';
       document.getElementById('g-heat').style.background = heatPct > 2.5 ? 'var(--red)' : heatPct > 1.5 ? 'var(--yellow)' : 'var(--purple)';
       document.getElementById('gv-heat').textContent = heatPct.toFixed(1) + '%';
       document.getElementById('gv-heat').className = 'gauge-val ' + (heatPct > 2.5 ? 'red' : heatPct > 1.5 ? 'yellow' : 'purple');
-    }
-
-    // Vol regime label in drawdown card
-    if (riskData?.risk?.volRegime) {
-      const vr = riskData.risk.volRegime;
-      const ddModeEl = document.getElementById('dd-mode');
-      if (ddModeEl) ddModeEl.textContent = (riskData.risk.drawdownMode || 'Normal') + ' · Vol:' + vr;
     }
 
   } catch (e) {
@@ -650,6 +691,14 @@ async function triggerScan() {
   try {
     const r = await fetch(`${API}/api/brain/scan`).then(x => x.json());
     if (r.signals?.length > 0) addFeed(`Scan complete: ${r.signals.length} signals`, 'feed-scan');
+  } catch {}
+}
+
+// ── Volatility fetch (slow — runs every 2 min, not every 5s) ─────────────────
+async function refreshVolatility() {
+  try {
+    const r = await fetch(`${API}/api/brain/volatility`).then(x => x.json());
+    if (r?.volatility) renderVolRegimes(r.volatility);
   } catch {}
 }
 
@@ -711,8 +760,10 @@ async function runBacktest() {
 
 refresh();
 triggerScan();
+refreshVolatility();
 setInterval(refresh, 5_000);
 setInterval(triggerScan, 60_000);
+setInterval(refreshVolatility, 120_000);
 window.addEventListener('resize', drawEquity);
 </script>
 </body>

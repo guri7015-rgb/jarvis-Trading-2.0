@@ -72,8 +72,17 @@ async function router(req, res) {
   }
 
   if (url.pathname === "/api/brain/state") {
-    try   { json(res, 200, { state: getScanState(), config: (await import("./config.js")).CONFIG }); }
-    catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    try {
+      const cfg = await import("./config.js");
+      json(res, 200, {
+        state: getScanState(),
+        config: {
+          ...cfg.CONFIG,
+          READ_ONLY:    cfg.READ_ONLY,
+          DEMO_ENABLED: cfg.DEMO_ENABLED,
+        },
+      });
+    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
     return;
   }
 
