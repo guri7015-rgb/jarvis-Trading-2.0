@@ -58,9 +58,10 @@ export function adx(candles, period = 14) {
     trArr.push(Math.max(curr.high - curr.low, Math.abs(curr.high - prev.close), Math.abs(curr.low - prev.close)));
   }
 
-  function wilder(arr, p) {
-    let sum = arr.slice(0, p).reduce((a, b) => a + b, 0);
-    const out = [sum];
+  // avgSeed: ATR/DI use raw-sum seed (cancels in ratio); ADX uses average seed (DX values are already 0-100)
+  function wilder(arr, p, avgSeed = false) {
+    const seed = arr.slice(0, p).reduce((a, b) => a + b, 0);
+    const out = [avgSeed ? seed / p : seed];
     for (let i = p; i < arr.length; i++) out.push(out[out.length - 1] - out[out.length - 1] / p + arr[i]);
     return out;
   }
@@ -70,7 +71,7 @@ export function adx(candles, period = 14) {
   const diM   = wilder(dmMinus, period).map((v, i) => atrW[i] ? 100 * v / atrW[i] : 0);
   const dx    = diP.map((p, i) => diP[i] + diM[i] ? 100 * Math.abs(p - diM[i]) / (p + diM[i]) : 0);
 
-  const adxArr = wilder(dx, period);
+  const adxArr = wilder(dx, period, true);  // average seed — keeps ADX in 0-100 range
   return { adx: adxArr, diPlus: diP, diMinus: diM };
 }
 

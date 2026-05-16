@@ -120,8 +120,11 @@ export const CONFIG = {
   // Support/resistance proximity
   srProximityPips: 5,            // don't enter within 5 pips of key level
 
-  // Portfolio heat cap
-  maxPortfolioHeat: 0.03,        // max 3% of balance at risk across all open trades
+  // Portfolio heat cap — demo mode: raised to allow many concurrent trades
+  maxPortfolioHeat: 0.50,        // max 50% of balance at risk across all open trades
+
+  // Correlation guard — demo mode: allow all correlated pairs to trade freely
+  maxCorrelatedPositions: 999,   // max instruments from same correlation group
 
   // SMC execution
   limitOrderExpiryHours: 8,      // GTD limit orders expire after 8 hours

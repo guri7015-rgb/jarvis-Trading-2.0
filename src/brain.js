@@ -284,12 +284,19 @@ export async function executeTopSignal() {
     account.balance, signal.instrument,
     price?.spread, _normalSpreads[signal.instrument], h1
   );
-  if (!ok) return { executed: false, reason };
+  if (!ok) {
+    process.stdout.write(`[FOREX EXEC] ${signal.instrument} blocked by canTrade: ${reason}\n`);
+    return { executed: false, reason };
+  }
 
   // Portfolio heat check before sizing
   const liveEntry = signal.direction === 'LONG' ? price.ask : price.bid;
   const units     = calcUnits(account.balance, liveEntry, signal.sl, signal.instrument, h1);
-  if (units === 0) return { executed: false, reason: 'Position size = 0 (heat cap, drawdown mode, or extreme vol)' };
+  if (units === 0) {
+    process.stdout.write(`[FOREX EXEC] ${signal.instrument} units=0 — heat cap, drawdown mode, or extreme vol\n`);
+    return { executed: false, reason: 'Position size = 0 (heat cap, drawdown mode, or extreme vol)' };
+  }
+  process.stdout.write(`[FOREX EXEC] ${signal.instrument} ${signal.direction} — units=${units}, confidence=${signal.confidence}%, entry=${liveEntry}\n`);
 
   // Run news eval + Claude AI analysis in parallel
   const [newsRes, aiRes] = await Promise.allSettled([
