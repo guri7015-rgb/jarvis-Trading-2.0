@@ -121,7 +121,9 @@ export async function cryptoFullScan() {
     for (const symbol of CRYPTO_INSTRUMENTS) {
       const h1 = h1Map[symbol];
       if (!h1 || h1.length < 80) {
-        errors.push({ instrument: symbol, reason: `Insufficient H1 candles (${h1?.length || 0})` });
+        const reason = `Insufficient H1 candles (${h1?.length || 0})`;
+        errors.push({ instrument: symbol, reason });
+        process.stdout.write(`[CRYPTO SCAN] ${symbol}: SKIP — ${reason}\n`);
         continue;
       }
 
@@ -132,27 +134,38 @@ export async function cryptoFullScan() {
       const regime = classifyRegime(eH4 || eH1);
       regimes[symbol] = regime;
 
+      const last = eH1[eH1.length - 1];
+      process.stdout.write(`[CRYPTO SCAN] ${symbol}: ADX=${last?.adx?.toFixed(1)??'null'} RSI=${last?.rsi?.toFixed(1)??'null'} regime=${regime}\n`);
+
       // Crypto is 24/7 — run strategies directly (no forex regime/strength filter)
       const candidates = [];
       const _tf = trendFollow(symbol, eH1);               if (_tf)  candidates.push(_tf);
       const _mr = meanReversion(symbol, eH1);             if (_mr)  candidates.push(_mr);
       const _bo = breakout(symbol, eH1);                  if (_bo)  candidates.push(_bo);
-      const _atr = eH1[eH1.length - 1]?.atr || 0.001;
+      const _atr = last?.atr || 0.001;
       const _smc = smcSignal(symbol, eH1, _atr);          if (_smc) candidates.push(_smc);
+
+      process.stdout.write(`[CRYPTO SCAN] ${symbol}: strategies fired — tf=${!!_tf} mr=${!!_mr} bo=${!!_bo} smc=${!!_smc}\n`);
+
       const signal = candidates.sort((a, b) => b.confidence - a.confidence)[0] || null;
       if (!signal) {
-        errors.push({ instrument: symbol, reason: 'No strategy signal (ADX/RSI/structure not met)' });
+        const reason = `No strategy signal (ADX=${last?.adx?.toFixed(1)??'null'} RSI=${last?.rsi?.toFixed(1)??'null'})`;
+        errors.push({ instrument: symbol, reason });
         continue;
       }
-      if (signal.confidence < 58) {  // slightly lower threshold for crypto
-        errors.push({ instrument: symbol, reason: `Confidence too low (${signal.confidence}%)` });
+      if (signal.confidence < 58) {
+        const reason = `Confidence too low (${signal.confidence}%)`;
+        errors.push({ instrument: symbol, reason });
+        process.stdout.write(`[CRYPTO SCAN] ${symbol}: SKIP — ${reason}\n`);
         continue;
       }
 
       // MTF confluence
       const conf = mtfConfluence(eD1, eH4, eH1, signal.direction);
       if (conf < CONFIG.mtfMinConfluence) {
-        errors.push({ instrument: symbol, reason: `MTF low (${(conf * 100).toFixed(0)}%)` });
+        const reason = `MTF low (${(conf * 100).toFixed(0)}%)`;
+        errors.push({ instrument: symbol, reason });
+        process.stdout.write(`[CRYPTO SCAN] ${symbol}: SKIP — ${reason}\n`);
         continue;
       }
       signal.confidence    = Math.min(95, signal.confidence + Math.round((conf - 0.5) * 20));
