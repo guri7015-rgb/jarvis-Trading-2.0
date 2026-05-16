@@ -558,20 +558,43 @@ canvas{display:block;width:100%}
 
   <!-- ══ PAGE: Positions ══ -->
   <div class="page" id="page-positions">
-    <div class="section-title">Open Positions</div>
-    <div class="section-sub">Click any row to see strategy, confidence, and AI reasoning</div>
-    <!-- Tab bar -->
+    <div class="section-title">All Trades</div>
+    <div class="section-sub">Open and closed — click any row for full strategy, confidence, and AI reasoning</div>
+
+    <!-- Market tabs -->
     <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button id="pos-tab-forex" onclick="posTab('forex')" style="padding:7px 20px;border-radius:10px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:var(--primary);color:#fff">Forex</button>
+      <button id="pos-tab-forex"  onclick="posTab('forex')"  style="padding:7px 20px;border-radius:10px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:var(--primary);color:#fff">Forex</button>
       <button id="pos-tab-crypto" onclick="posTab('crypto')" style="padding:7px 20px;border-radius:10px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:var(--bg);color:var(--muted)">Crypto</button>
     </div>
-    <div class="card" id="pos-panel-forex">
-      <div class="card-hdr"><span>Forex Positions (OANDA)</span><span id="pos-count-forex" class="blue">0 open</span></div>
-      <div style="padding:0" id="pos-wrap-forex"><div style="padding:24px;text-align:center;color:var(--muted)">No open forex positions</div></div>
+
+    <!-- ── FOREX panel ── -->
+    <div id="pos-panel-forex">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-hdr"><span>Open Forex Positions</span><span id="pos-count-forex" class="blue">0 open</span></div>
+        <div style="padding:0" id="pos-wrap-forex"><div style="padding:24px;text-align:center;color:var(--muted)">No open forex positions</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">
+          <span>Forex Trade History</span>
+          <span id="hist-count-forex" style="color:var(--muted);font-size:10px">—</span>
+        </div>
+        <div style="padding:0" id="hist-wrap-forex"><div style="padding:24px;text-align:center;color:var(--muted)">Loading history…</div></div>
+      </div>
     </div>
-    <div class="card" id="pos-panel-crypto" style="display:none">
-      <div class="card-hdr"><span>Crypto Positions (Paper)</span><span id="pos-count-crypto" class="blue">0 open</span></div>
-      <div style="padding:0" id="pos-wrap-crypto"><div style="padding:24px;text-align:center;color:var(--muted)">No open crypto positions</div></div>
+
+    <!-- ── CRYPTO panel ── -->
+    <div id="pos-panel-crypto" style="display:none">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-hdr"><span>Open Crypto Positions (Paper)</span><span id="pos-count-crypto" class="blue">0 open</span></div>
+        <div style="padding:0" id="pos-wrap-crypto"><div style="padding:24px;text-align:center;color:var(--muted)">No open crypto positions</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">
+          <span>Crypto Trade History</span>
+          <span id="hist-count-crypto" style="color:var(--muted);font-size:10px">—</span>
+        </div>
+        <div style="padding:0" id="hist-wrap-crypto"><div style="padding:24px;text-align:center;color:var(--muted)">Loading history…</div></div>
+      </div>
     </div>
   </div>
 
@@ -777,6 +800,7 @@ function showPage(id, el) {
   if (page) page.classList.add('active');
   if (el) el.classList.add('active');
   document.getElementById('main').scrollTop = 0;
+  if (id === 'positions') fetchTradeHistory();
 }
 
 // ── Kill switch ───────────────────────────────────────────────────────────────
@@ -953,7 +977,7 @@ function openTradeModal(id) {
   if (!t) return;
   const dir    = t.direction || (t.units > 0 ? 'LONG' : 'SHORT');
   const isCrypto = t.market === 'crypto';
-  const pnl    = t.unrealizedPL || 0;
+  const pnl    = t.closeTime ? (t.realizedPL || 0) : (t.unrealizedPL || 0);
   const c      = parseComment(t.clientComment);
   const entry  = t.openPrice || 0;
   const sl     = t.sl;
@@ -1097,7 +1121,14 @@ function openTradeModal(id) {
           </div>
           <div>
             <div class="tmodal-meta-row"><span class="tmodal-meta-key">Instrument</span><span class="tmodal-meta-val">${t.instrument}</span></div>
-            <div class="tmodal-meta-row"><span class="tmodal-meta-key">Current P&L</span><span class="tmodal-meta-val" style="color:${pnlColor}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</span></div>
+            ${t.closeTime
+              ? `<div class="tmodal-meta-row"><span class="tmodal-meta-key">Realized P&L</span><span class="tmodal-meta-val" style="color:${pnlColor}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</span></div>
+                 <div class="tmodal-meta-row"><span class="tmodal-meta-key">Close Price</span><span class="tmodal-meta-val">${fmtPrice(t.closePrice,t.market)}</span></div>
+                 <div class="tmodal-meta-row"><span class="tmodal-meta-key">Closed</span><span class="tmodal-meta-val">${new Date(t.closeTime).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'})}</span></div>
+                 <div class="tmodal-meta-row"><span class="tmodal-meta-key">Close Reason</span><span class="tmodal-meta-val" style="color:${t.closeReason==='TP'?'var(--green)':t.closeReason==='SL'?'var(--red)':'var(--muted)'}">${t.closeReason||'—'}</span></div>
+                 <div class="tmodal-meta-row"><span class="tmodal-meta-key">Duration</span><span class="tmodal-meta-val">${fmtDuration(t.openTime,t.closeTime)}</span></div>`
+              : `<div class="tmodal-meta-row"><span class="tmodal-meta-key">Unrealized P&L</span><span class="tmodal-meta-val" style="color:${pnlColor}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</span></div>
+                 <div class="tmodal-meta-row"><span class="tmodal-meta-key">Status</span><span class="tmodal-meta-val" style="color:var(--green)">OPEN</span></div>`}
             <div class="tmodal-meta-row"><span class="tmodal-meta-key">Paper Trade</span><span class="tmodal-meta-val">${t.paper ? 'Yes (simulated)' : 'No (live)'}</span></div>
           </div>
         </div>
@@ -1113,6 +1144,18 @@ function closeTradeModal(e) {
   document.getElementById('trade-modal').classList.remove('open');
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTradeModal(); });
+
+// ── Duration formatter ────────────────────────────────────────────────────────
+function fmtDuration(openTime, closeTime) {
+  if (!openTime || !closeTime) return '—';
+  const ms = new Date(closeTime) - new Date(openTime);
+  if (ms < 0) return '—';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h >= 24) return `${Math.floor(h/24)}d ${h%24}h`;
+  if (h >= 1)  return `${h}h ${m}m`;
+  return `${m}m`;
+}
 
 // ── Position table builder ────────────────────────────────────────────────────
 function buildPositionTable(trades) {
@@ -1141,6 +1184,80 @@ function buildPositionTable(trades) {
       <td style="color:var(--primary);font-size:18px;text-align:center;opacity:.6">⊕</td>
     </tr>`;
   }).join('')}</tbody></table>`;
+}
+
+// ── Closed trade history table ────────────────────────────────────────────────
+function buildHistoryTable(trades) {
+  if (!trades.length)
+    return '<div style="padding:24px;text-align:center;color:var(--muted)">No closed trades yet — history will appear here as the bot trades.</div>';
+
+  trades.forEach(t => { _tradeStore[t.id] = t; });
+
+  // Win/loss summary row
+  const wins   = trades.filter(t => (t.realizedPL || 0) > 0).length;
+  const losses = trades.filter(t => (t.realizedPL || 0) <= 0).length;
+  const totalPL = trades.reduce((s, t) => s + (t.realizedPL || 0), 0);
+  const winPct  = trades.length ? Math.round(wins / trades.length * 100) : 0;
+
+  const summary = `<div style="display:flex;gap:16px;padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);font-size:11px;flex-wrap:wrap">
+    <span>📊 <b>${trades.length}</b> trades</span>
+    <span style="color:var(--green)">✅ <b>${wins}</b> wins</span>
+    <span style="color:var(--red)">❌ <b>${losses}</b> losses</span>
+    <span>📈 Win rate <b>${winPct}%</b></span>
+    <span style="color:${totalPL>=0?'var(--green)':'var(--red)'}">💰 Total P&L <b>${totalPL>=0?'+':''}$${totalPL.toFixed(2)}</b></span>
+  </div>`;
+
+  const rows = trades.map(t => {
+    const dir    = t.direction || (t.units > 0 ? 'LONG' : 'SHORT');
+    const pnl    = t.realizedPL || 0;
+    const c      = parseComment(t.clientComment);
+    const reason = t.closeReason || '—';
+    const reasonColor = reason === 'TP' ? 'var(--green)' : reason === 'SL' ? 'var(--red)' : 'var(--muted)';
+    const dur    = fmtDuration(t.openTime, t.closeTime);
+    const dateStr = t.closeTime?.slice(0, 10) || t.openTime?.slice(0, 10) || '—';
+    const strategy = (c.strategy || '—').replace(/_/g, ' ');
+    return `<tr style="cursor:pointer;opacity:.92" onclick="openTradeModal('${t.id}')" title="Click for full details">
+      <td><b>${t.instrument}</b></td>
+      <td><span class="tag tag-${dir.toLowerCase()}">${dir}</span></td>
+      <td>${fmtPrice(t.openPrice, t.market)}</td>
+      <td>${fmtPrice(t.closePrice, t.market)}</td>
+      <td class="${pnl>=0?'green':'red'}" style="font-weight:700">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
+      <td style="color:${reasonColor};font-weight:700;font-size:10px">${reason}</td>
+      <td class="muted">${dur}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--primary)">${strategy}</td>
+      <td class="muted">${dateStr}</td>
+      <td style="color:var(--primary);font-size:18px;text-align:center;opacity:.6">⊕</td>
+    </tr>`;
+  }).join('');
+
+  return summary + `<div style="overflow-x:auto"><table><thead><tr>
+    <th>Pair</th><th>Dir</th><th>Entry</th><th>Close</th><th>P&L</th><th>Reason</th><th>Duration</th><th>Strategy</th><th>Date</th><th></th>
+  </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// ── Fetch and render trade history ────────────────────────────────────────────
+async function fetchTradeHistory() {
+  try {
+    const [forexRes, cryptoRes] = await Promise.allSettled([
+      fetch(`${API}/api/brain/closed-trades?count=100`).then(r => r.json()),
+      fetch(`${API}/api/crypto/closed-trades?count=100`).then(r => r.json()),
+    ]);
+
+    const forexTrades  = forexRes.status  === 'fulfilled' ? (forexRes.value.trades  || []) : [];
+    const cryptoTrades = cryptoRes.status === 'fulfilled' ? (cryptoRes.value.trades || []) : [];
+
+    const fEl = document.getElementById('hist-wrap-forex');
+    const cEl = document.getElementById('hist-wrap-crypto');
+    const fCt = document.getElementById('hist-count-forex');
+    const cCt = document.getElementById('hist-count-crypto');
+
+    if (fEl) fEl.innerHTML = buildHistoryTable(forexTrades);
+    if (cEl) cEl.innerHTML = buildHistoryTable(cryptoTrades);
+    if (fCt) fCt.textContent = forexTrades.length + ' closed';
+    if (cCt) cCt.textContent = cryptoTrades.length + ' closed';
+  } catch(e) {
+    console.error('Trade history fetch failed:', e);
+  }
 }
 
 function renderPositions(trades) {
@@ -1773,9 +1890,11 @@ refresh();
 refreshBrokers();
 triggerScan();
 safeRefresh();
-setInterval(triggerScan,       60_000);
-setInterval(refreshBrokers,    30_000);
-setInterval(triggerCryptoScan, 90_000);
+fetchTradeHistory();
+setInterval(triggerScan,        60_000);
+setInterval(refreshBrokers,     30_000);
+setInterval(triggerCryptoScan,  90_000);
+setInterval(fetchTradeHistory, 120_000); // refresh history every 2 min
 window.addEventListener('resize', drawEquity);
 
 // ── Session clocks ────────────────────────────────────────────────────────────

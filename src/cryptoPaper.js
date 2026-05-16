@@ -20,11 +20,12 @@ function _saveState() {
   try {
     mkdirSync(DATA_DIR, { recursive: true });
     writeFileSync(STATE_FILE, JSON.stringify({
-      balance:   _paperBalance,
-      pnl:       _paperPnL,
-      trades:    _tradeCount,
-      positions: [..._paperPositions.entries()],
-      savedAt:   new Date().toISOString(),
+      balance:      _paperBalance,
+      pnl:          _paperPnL,
+      trades:       _tradeCount,
+      positions:    [..._paperPositions.entries()],
+      closedTrades: _closedTrades.slice(0, 200),
+      savedAt:      new Date().toISOString(),
     }, null, 2));
   } catch(e) { process.stdout.write(`[PAPER] State save failed: ${e.message}\n`); }
 }
@@ -33,11 +34,12 @@ function _loadState() {
   try {
     if (!existsSync(STATE_FILE)) return;
     const d = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
-    _paperBalance   = d.balance   ?? 10_000;
-    _paperPnL       = d.pnl       ?? 0;
-    _tradeCount     = d.trades    ?? 0;
+    _paperBalance   = d.balance      ?? 10_000;
+    _paperPnL       = d.pnl          ?? 0;
+    _tradeCount     = d.trades       ?? 0;
     _paperPositions = new Map(d.positions || []);
-    process.stdout.write(`[PAPER] Restored state: $${_paperBalance.toFixed(2)}, ${_paperPositions.size} position(s)\n`);
+    _closedTrades   = d.closedTrades || [];
+    process.stdout.write(`[PAPER] Restored state: $${_paperBalance.toFixed(2)}, ${_paperPositions.size} open, ${_closedTrades.length} closed\n`);
   } catch(e) { process.stdout.write(`[PAPER] State load failed: ${e.message}\n`); }
 }
 
@@ -54,6 +56,7 @@ export const CRYPTO_PRICE_DEC = {
 // ── Paper account state ───────────────────────────────────────────────────────
 let _paperBalance   = 10_000;
 let _paperPositions = new Map();
+let _closedTrades   = [];
 let _paperPnL       = 0;
 let _tradeCount     = 0;
 _loadState(); // restore from disk on startup
@@ -273,13 +276,14 @@ export async function closeCryptoPosition(symbol) {
   const pos = _paperPositions.get(symbol);
   if (!pos) return { ok: true, message: 'No position' };
 
-  // Get closing price
+  let closePrice = pos.openPrice;
+  let pnl = 0;
   try {
     const prices = await getCryptoPrices([symbol]);
     const price  = prices[symbol];
     if (price) {
-      const closePrice = pos.direction === 'LONG' ? price.bid : price.ask;
-      const pnl = pos.direction === 'LONG'
+      closePrice = pos.direction === 'LONG' ? price.bid : price.ask;
+      pnl = pos.direction === 'LONG'
         ? (closePrice - pos.openPrice) * Math.abs(pos.units)
         : (pos.openPrice - closePrice) * Math.abs(pos.units);
       _paperBalance += pnl;
@@ -287,6 +291,16 @@ export async function closeCryptoPosition(symbol) {
       process.stdout.write(`[PAPER CRYPTO] Closed ${symbol} @ ${closePrice} | PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\n`);
     }
   } catch {}
+
+  _closedTrades.unshift({
+    id: pos.id, instrument: symbol, direction: pos.direction,
+    units: Math.abs(pos.units), openPrice: pos.openPrice, closePrice,
+    realizedPL: +pnl.toFixed(2), openTime: pos.openTime,
+    closeTime: new Date().toISOString(), closeReason: 'manual',
+    sl: pos.sl, tp: pos.tp, clientComment: pos.clientComment || '',
+    market: 'crypto', paper: true,
+  });
+  if (_closedTrades.length > 200) _closedTrades.pop();
 
   _paperPositions.delete(symbol);
   _saveState();
@@ -318,6 +332,17 @@ export async function checkPaperSLTP() {
       _paperBalance += pnl;
       _paperPnL     += pnl;
       process.stdout.write(`[PAPER CRYPTO] ${hit} hit on ${sym} @ ${closePrice} | PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\n`);
+
+      _closedTrades.unshift({
+        id: pos.id, instrument: sym, direction: pos.direction,
+        units: Math.abs(pos.units), openPrice: pos.openPrice, closePrice,
+        realizedPL: +pnl.toFixed(2), openTime: pos.openTime,
+        closeTime: new Date().toISOString(), closeReason: hit,
+        sl: pos.sl, tp: pos.tp, clientComment: pos.clientComment || '',
+        market: 'crypto', paper: true,
+      });
+      if (_closedTrades.length > 200) _closedTrades.pop();
+
       _paperPositions.delete(sym);
       _saveState();
     }
@@ -327,4 +352,7 @@ export async function checkPaperSLTP() {
 export async function setLeverage() {} // no-op for paper trading
 export function getPaperStats() {
   return { balance: _paperBalance, totalPnL: _paperPnL, trades: _tradeCount, positions: _paperPositions.size };
+}
+export function getClosedCryptoTrades(count = 50) {
+  return _closedTrades.slice(0, count);
 }

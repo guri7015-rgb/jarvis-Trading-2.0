@@ -107,17 +107,22 @@ export async function getOpenTrades() {
   }));
 }
 
-export async function getClosedTrades(count = 20) {
+export async function getClosedTrades(count = 50) {
   const data = await get(`/v3/accounts/${OANDA_ACCT}/trades?state=CLOSED&count=${count}`);
   return (data.trades || []).map((t) => ({
-    id:           t.id,
-    instrument:   t.instrument,
-    units:        parseFloat(t.initialUnits),
-    openPrice:    parseFloat(t.price),
-    closePrice:   parseFloat(t.averageClosePrice || t.price),
-    realizedPL:   parseFloat(t.realizedPL),
-    openTime:     t.openTime,
-    closeTime:    t.closeTime,
+    id:            t.id,
+    instrument:    t.instrument,
+    units:         parseFloat(t.initialUnits),
+    direction:     parseFloat(t.initialUnits) > 0 ? 'LONG' : 'SHORT',
+    openPrice:     parseFloat(t.price),
+    closePrice:    parseFloat(t.averageClosePrice || t.price),
+    realizedPL:    parseFloat(t.realizedPL),
+    openTime:      t.openTime,
+    closeTime:     t.closeTime,
+    sl:            t.stopLossOrder   ? parseFloat(t.stopLossOrder.price)   : null,
+    tp:            t.takeProfitOrder ? parseFloat(t.takeProfitOrder.price) : null,
+    clientComment: t.clientExtensions?.comment || '',
+    market:        'forex',
   }));
 }
 

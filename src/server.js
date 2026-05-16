@@ -10,14 +10,14 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { PORT, INSTRUMENTS, CONFIG, OANDA_ENV, OANDA_ACCT } from "./config.js";
 import { fullScan, executeTopSignal, getScanState } from "./brain.js";
-import { getAccountSummary, getOpenTrades, closeAllPositions, getMultiCandles } from "./oanda.js";
+import { getAccountSummary, getOpenTrades, closeAllPositions, getMultiCandles, getClosedTrades } from "./oanda.js";
 import { fetchEconomicCalendar, getRelevantEvents, fetchHeadlines, analyzeHeadlinesWithClaude, categorizeHeadline } from "./news.js";
 import { runBacktest, runFullBacktest } from "./backtest.js";
 import { calcStrength, rankCurrencies } from "./strength.js";
 import { getHeatState, atrPercentile, getVolRegime } from "./volatility.js";
 import { getRiskState } from "./risk.js";
 import { cryptoFullScan, executeCryptoTopSignal, getCryptoState } from "./cryptoBrain.js";
-import { getCryptoAccount, getCryptoPositions, closeCryptoPosition, getPaperStats } from "./cryptoPaper.js";
+import { getCryptoAccount, getCryptoPositions, closeCryptoPosition, getPaperStats, getClosedCryptoTrades } from "./cryptoPaper.js";
 import { CRYPTO_INSTRUMENTS } from "./config.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
@@ -98,6 +98,19 @@ async function router(req, res) {
   if (url.pathname === "/api/brain/positions") {
     try   { json(res, 200, { trades: await getOpenTrades() }); }
     catch (e) { json(res, 500, { error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/brain/closed-trades") {
+    const count = Math.min(200, parseInt(url.searchParams.get("count") || "50"));
+    try   { json(res, 200, { ok: true, trades: await getClosedTrades(count) }); }
+    catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/crypto/closed-trades") {
+    const count = Math.min(200, parseInt(url.searchParams.get("count") || "50"));
+    json(res, 200, { ok: true, trades: getClosedCryptoTrades(count) });
     return;
   }
 
