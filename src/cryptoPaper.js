@@ -8,6 +8,38 @@
  * Execution is simulated locally — tracks virtual positions + P&L.
  */
 import https from 'https';
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dir  = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR   = resolve(__dir, '../data');
+const STATE_FILE = resolve(DATA_DIR, 'paper-state.json');
+
+function _saveState() {
+  try {
+    mkdirSync(DATA_DIR, { recursive: true });
+    writeFileSync(STATE_FILE, JSON.stringify({
+      balance:   _paperBalance,
+      pnl:       _paperPnL,
+      trades:    _tradeCount,
+      positions: [..._paperPositions.entries()],
+      savedAt:   new Date().toISOString(),
+    }, null, 2));
+  } catch(e) { process.stdout.write(`[PAPER] State save failed: ${e.message}\n`); }
+}
+
+function _loadState() {
+  try {
+    if (!existsSync(STATE_FILE)) return;
+    const d = JSON.parse(readFileSync(STATE_FILE, 'utf8'));
+    _paperBalance   = d.balance   ?? 10_000;
+    _paperPnL       = d.pnl       ?? 0;
+    _tradeCount     = d.trades    ?? 0;
+    _paperPositions = new Map(d.positions || []);
+    process.stdout.write(`[PAPER] Restored state: $${_paperBalance.toFixed(2)}, ${_paperPositions.size} position(s)\n`);
+  } catch(e) { process.stdout.write(`[PAPER] State load failed: ${e.message}\n`); }
+}
 
 export const CRYPTO_QTY_DEC = {
   BTCUSDT: 3, ETHUSDT: 3, SOLUSDT: 1, BNBUSDT: 2,
@@ -24,6 +56,7 @@ let _paperBalance   = 10_000;
 let _paperPositions = new Map();
 let _paperPnL       = 0;
 let _tradeCount     = 0;
+_loadState(); // restore from disk on startup
 
 // ── Generic HTTPS GET ─────────────────────────────────────────────────────────
 function httpsGet(hostname, path, ms = 20_000) {
@@ -231,6 +264,7 @@ export async function placeCryptoOrder(symbol, direction, quantity, sl, tp, comm
 
   _tradeCount++;
   process.stdout.write(`[PAPER CRYPTO] ${direction} ${units} ${symbol} @ ${fillPrice} | SL:${sl?.toFixed(2)} TP:${tp?.toFixed(2)}\n`);
+  _saveState();
 
   return { orderId: tradeId, paper: true, fillPrice, symbol, direction, qty: units };
 }
@@ -255,6 +289,7 @@ export async function closeCryptoPosition(symbol) {
   } catch {}
 
   _paperPositions.delete(symbol);
+  _saveState();
   return { ok: true, paper: true };
 }
 
@@ -284,6 +319,7 @@ export async function checkPaperSLTP() {
       _paperPnL     += pnl;
       process.stdout.write(`[PAPER CRYPTO] ${hit} hit on ${sym} @ ${closePrice} | PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}\n`);
       _paperPositions.delete(sym);
+      _saveState();
     }
   }
 }

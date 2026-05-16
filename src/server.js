@@ -11,7 +11,7 @@ import { fileURLToPath } from "url";
 import { PORT, INSTRUMENTS, CONFIG, OANDA_ENV, OANDA_ACCT } from "./config.js";
 import { fullScan, executeTopSignal, getScanState } from "./brain.js";
 import { getAccountSummary, getOpenTrades, closeAllPositions, getMultiCandles } from "./oanda.js";
-import { fetchEconomicCalendar, getRelevantEvents, fetchHeadlines } from "./news.js";
+import { fetchEconomicCalendar, getRelevantEvents, fetchHeadlines, analyzeHeadlinesWithClaude, categorizeHeadline } from "./news.js";
 import { runBacktest, runFullBacktest } from "./backtest.js";
 import { calcStrength, rankCurrencies } from "./strength.js";
 import { getHeatState, atrPercentile, getVolRegime } from "./volatility.js";
@@ -132,7 +132,22 @@ async function router(req, res) {
   if (url.pathname === "/api/news/headlines") {
     try {
       const headlines = await fetchHeadlines();
-      json(res, 200, { ok: true, count: headlines.length, headlines: headlines.slice(0, 20) });
+      const tagged = headlines.slice(0, 20).map(h => ({ ...h, category: categorizeHeadline(h.title) }));
+      json(res, 200, { ok: true, count: tagged.length, headlines: tagged });
+    } catch (e) { json(res, 500, { ok: false, error: e.message }); }
+    return;
+  }
+
+  if (url.pathname === "/api/news/analysis") {
+    try {
+      const headlines = await fetchHeadlines();
+      const analysis  = await analyzeHeadlinesWithClaude(headlines);
+      const tagged    = headlines.slice(0, 15).map((h, i) => ({
+        ...h,
+        category:  categorizeHeadline(h.title),
+        analysis:  analysis.find(a => a.index === i + 1) || null,
+      }));
+      json(res, 200, { ok: true, count: tagged.length, headlines: tagged });
     } catch (e) { json(res, 500, { ok: false, error: e.message }); }
     return;
   }

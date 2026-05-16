@@ -257,6 +257,79 @@ Respond ONLY with valid JSON (no markdown, no extra text):
   }
 }
 
+// ── News category classifier (keyword-based, no API cost) ────────────────────
+const CATEGORY_RULES = [
+  { label: 'Central Banks',  keywords: ['fed','fomc','ecb','boj','boe','rba','snb','rbnz','boc','powell','lagarde','ueda','bailey','rate','interest rate','monetary','central bank','basis point'] },
+  { label: 'Macro Economy',  keywords: ['gdp','inflation','cpi','pce','jobs','nonfarm','employment','unemployment','retail sales','pmi','ism','trade balance','current account','recession','growth'] },
+  { label: 'Crypto',         keywords: ['bitcoin','btc','ethereum','eth','crypto','blockchain','defi','nft','solana','binance','coinbase','stablecoin','altcoin','web3','token','mining'] },
+  { label: 'Commodities',    keywords: ['oil','crude','brent','wti','gold','silver','copper','natural gas','commodity','opec','energy','metals','wheat','corn','agriculture'] },
+  { label: 'Geopolitics',    keywords: ['war','conflict','sanction','tariff','trade war','geopolit','nato','ukraine','russia','china','taiwan','middle east','iran','north korea','treaty','election'] },
+  { label: 'Equities',       keywords: ['stocks','s&p','nasdaq','dow','earnings','ipo','market rally','market crash','bull','bear market','equity','share','dividend','wall street'] },
+  { label: 'Technology',     keywords: ['ai','artificial intelligence','tech','apple','microsoft','google','meta','nvidia','semiconductor','chip','software','data center','openai'] },
+];
+
+export function categorizeHeadline(title) {
+  const t = title.toLowerCase();
+  for (const rule of CATEGORY_RULES) {
+    if (rule.keywords.some(k => t.includes(k))) return rule.label;
+  }
+  return 'General';
+}
+
+// ── Claude market-impact analysis for headlines batch ────────────────────────
+let _analysisCache = null;
+let _analysisFetched = 0;
+
+export async function analyzeHeadlinesWithClaude(headlines) {
+  if (!ANTHROPIC_KEY) return [];
+  if (!headlines?.length) return [];
+
+  // Cache for 10 minutes
+  if (_analysisCache && Date.now() - _analysisFetched < 10 * 60_000) return _analysisCache;
+
+  const items = headlines.slice(0, 15).map((h, i) => `${i+1}. ${h.title}`).join('\n');
+
+  const prompt = `You are a financial market analyst. For each headline below, provide a brief market impact analysis.
+
+Headlines:
+${items}
+
+For EACH headline respond with a JSON array (one object per headline, same order):
+[
+  {
+    "index": 1,
+    "category": "Central Banks|Macro Economy|Crypto|Commodities|Geopolitics|Equities|Technology|General",
+    "markets": ["EUR/USD","USD/JPY","XAU/USD","BTC","Oil", etc — list affected markets],
+    "direction": "bullish"|"bearish"|"neutral"|"mixed",
+    "impact": "HIGH"|"MEDIUM"|"LOW",
+    "reasoning": "1-2 sentences: why this matters and expected market effect"
+  }
+]
+
+Respond ONLY with the JSON array. No markdown, no extra text.`;
+
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: ANTHROPIC_KEY });
+    const msg = await Promise.race([
+      client.messages.create({
+        model: CONFIG.aiModel, max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20_000)),
+    ]);
+    let raw = msg.content[0].text.trim();
+    if (raw.startsWith('```')) raw = raw.split('```')[1].replace(/^json/, '');
+    const parsed = JSON.parse(raw);
+    _analysisCache = parsed;
+    _analysisFetched = Date.now();
+    return parsed;
+  } catch(e) {
+    process.stdout.write(`[NEWS AI] Analysis failed: ${e.message}\n`);
+    return [];
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function evaluateSignal(signal) {

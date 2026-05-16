@@ -154,6 +154,22 @@ canvas{display:block;width:100%}
 /* ── Regime tag ── */
 .regime-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bg)}
 .regime-item:last-child{border-bottom:none}
+.news-cat-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:10px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
+.news-cat-btn:hover{border-color:var(--primary);color:var(--primary)}
+.news-cat-btn.active{background:var(--grad1);border-color:transparent;color:#fff}
+.news-item{padding:12px 16px;border-bottom:1px solid var(--bg);transition:.15s}
+.news-item:hover{background:var(--bg)}
+.news-item-title{font-size:12px;font-weight:500;line-height:1.4;color:var(--text);margin-bottom:6px}
+.news-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.news-cat-tag{padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.news-impact-high{background:#fee2e2;color:#991b1b}
+.news-impact-med{background:#fef3c7;color:#92400e}
+.news-impact-low{background:#d1fae5;color:#065f46}
+.news-dir-bull{color:var(--green);font-weight:700}
+.news-dir-bear{color:var(--red);font-weight:700}
+.news-dir-neutral{color:var(--muted);font-weight:600}
+.news-ai-box{background:linear-gradient(135deg,rgba(108,99,255,.06),rgba(167,139,250,.04));border:1px solid rgba(108,99,255,.15);border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.5;color:var(--text)}
+.news-ai-markets{font-size:10px;color:var(--primary);font-weight:600;margin-bottom:3px}
 </style>
 </head>
 <body>
@@ -236,9 +252,11 @@ canvas{display:block;width:100%}
     <div class="section-title">Dashboard</div>
     <div class="section-sub"><span class="pulse"></span>Live market overview — auto-refreshes every 5s</div>
 
-    <div class="grid4">
+    <!-- Forex metrics row -->
+    <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:700;margin-bottom:6px;padding-left:2px">Forex · OANDA Practice</div>
+    <div class="grid4" style="margin-bottom:8px">
       <div class="metric-card mc1">
-        <div class="metric-label">Equity / NAV</div>
+        <div class="metric-label">Forex Equity / NAV</div>
         <div class="metric-val" id="equity">$0.00</div>
         <div class="metric-sub" id="unrealized">0.00 unrealized</div>
       </div>
@@ -256,6 +274,30 @@ canvas{display:block;width:100%}
         <div class="metric-label">Max Drawdown</div>
         <div class="metric-val" id="drawdown">0.0%</div>
         <div class="metric-sub" id="dd-mode">Normal mode</div>
+      </div>
+    </div>
+    <!-- Crypto metrics row -->
+    <div style="font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);font-weight:700;margin-bottom:6px;padding-left:2px">Crypto · Paper Trading</div>
+    <div class="grid4" style="margin-bottom:16px">
+      <div class="metric-card" style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #334155">
+        <div class="metric-label" style="color:#94a3b8">Crypto Balance</div>
+        <div class="metric-val" id="crypto-balance" style="color:#f1f5f9">$0.00</div>
+        <div class="metric-sub" id="crypto-unrealized" style="color:#64748b">0.00 unrealized</div>
+      </div>
+      <div class="metric-card" style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #334155">
+        <div class="metric-label" style="color:#94a3b8">Crypto P&L</div>
+        <div class="metric-val" id="crypto-pnl" style="color:#f1f5f9">$0.00</div>
+        <div class="metric-sub" id="crypto-trades" style="color:#64748b">0 total trades</div>
+      </div>
+      <div class="metric-card" style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #334155">
+        <div class="metric-label" style="color:#94a3b8">Open Crypto Pos.</div>
+        <div class="metric-val" id="crypto-open" style="color:#f1f5f9">0</div>
+        <div class="metric-sub" id="crypto-provider" style="color:#64748b">paper trading</div>
+      </div>
+      <div class="metric-card" style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid #334155">
+        <div class="metric-label" style="color:#94a3b8">Combined NAV</div>
+        <div class="metric-val" id="combined-nav" style="color:#a78bfa">$0.00</div>
+        <div class="metric-sub" id="combined-sub" style="color:#64748b">forex + crypto</div>
       </div>
     </div>
 
@@ -346,16 +388,32 @@ canvas{display:block;width:100%}
 
   <!-- ══ PAGE: News ══ -->
   <div class="page" id="page-news">
-    <div class="section-title">News & Calendar</div>
-    <div class="section-sub">Economic events + breaking headlines</div>
+    <div class="section-title">News & Intelligence</div>
+    <div class="section-sub">Economic calendar · Breaking headlines · Claude market-impact analysis</div>
+
+    <!-- Category filter tabs -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" id="news-cat-tabs">
+      <button class="news-cat-btn active" onclick="filterNews('All')" data-cat="All">All</button>
+      <button class="news-cat-btn" onclick="filterNews('Central Banks')" data-cat="Central Banks">Central Banks</button>
+      <button class="news-cat-btn" onclick="filterNews('Macro Economy')" data-cat="Macro Economy">Macro Economy</button>
+      <button class="news-cat-btn" onclick="filterNews('Crypto')" data-cat="Crypto">Crypto</button>
+      <button class="news-cat-btn" onclick="filterNews('Commodities')" data-cat="Commodities">Commodities</button>
+      <button class="news-cat-btn" onclick="filterNews('Geopolitics')" data-cat="Geopolitics">Geopolitics</button>
+      <button class="news-cat-btn" onclick="filterNews('Equities')" data-cat="Equities">Equities</button>
+      <button class="news-cat-btn" onclick="filterNews('Technology')" data-cat="Technology">Technology</button>
+    </div>
+
     <div class="grid2">
       <div class="card">
         <div class="card-hdr"><span>Economic Calendar</span><span id="cal-count2" class="muted">0 events</span></div>
-        <div style="padding:0;max-height:500px;overflow-y:auto" id="calendar-wrap2"></div>
+        <div style="padding:0;max-height:520px;overflow-y:auto" id="calendar-wrap2"></div>
       </div>
       <div class="card">
-        <div class="card-hdr">Breaking Headlines</div>
-        <div class="card-body" id="headlines-wrap"><div style="color:var(--muted)">Loading headlines…</div></div>
+        <div class="card-hdr">
+          <span>Headlines + AI Analysis</span>
+          <button onclick="loadNewsAnalysis()" style="background:var(--grad1);border:none;color:#fff;padding:3px 10px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">⚡ Analyze</button>
+        </div>
+        <div style="max-height:520px;overflow-y:auto;padding:0" id="headlines-wrap"></div>
       </div>
     </div>
   </div>
@@ -932,20 +990,73 @@ function renderCalendar(events) {
   });
 }
 
-// ── Render headlines ──────────────────────────────────────────────────────────
-function renderHeadlines(headlines) {
+// ── News state ────────────────────────────────────────────────────────────────
+let _allHeadlines = [];
+let _newsFilter   = 'All';
+
+const CAT_COLORS = {
+  'Central Banks': '#7c3aed', 'Macro Economy': '#1d4ed8', 'Crypto': '#d97706',
+  'Commodities': '#15803d',   'Geopolitics':   '#b91c1c', 'Equities': '#0369a1',
+  'Technology':  '#0f766e',   'General':        '#64748b',
+};
+
+function renderHeadlinesList() {
   const el = document.getElementById('headlines-wrap');
   if (!el) return;
-  if (!headlines?.length) {
-    el.innerHTML = '<div style="color:var(--muted)">No headlines — add NEWS_API_KEY in Railway variables</div>';
+  if (!_allHeadlines.length) {
+    el.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:12px">No headlines — add NEWS_API_KEY in Railway environment variables</div>';
     return;
   }
-  el.innerHTML = headlines.map(h =>
-    `<div class="feed-item">
-      <div style="font-size:11px;font-weight:500;line-height:1.4;color:var(--text)">${h.title}</div>
-      <div class="feed-time">${h.source} · ${h.published?new Date(h.published).toUTCString().slice(5,22):''}</div>
-    </div>`
-  ).join('');
+  const filtered = _newsFilter === 'All' ? _allHeadlines : _allHeadlines.filter(h => h.category === _newsFilter);
+  if (!filtered.length) {
+    el.innerHTML = `<div style="padding:16px;color:var(--muted);font-size:12px">No headlines in category "${_newsFilter}"</div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(h => {
+    const cat   = h.category || 'General';
+    const color = CAT_COLORS[cat] || '#64748b';
+    const a     = h.analysis;
+    const impact = a?.impact || '';
+    const impactCls = impact === 'HIGH' ? 'news-impact-high' : impact === 'MEDIUM' ? 'news-impact-med' : impact === 'LOW' ? 'news-impact-low' : '';
+    const dirCls = a?.direction === 'bullish' ? 'news-dir-bull' : a?.direction === 'bearish' ? 'news-dir-bear' : 'news-dir-neutral';
+    const dirSymbol = a?.direction === 'bullish' ? '↑ Bullish' : a?.direction === 'bearish' ? '↓ Bearish' : a?.direction === 'mixed' ? '↕ Mixed' : '';
+    const marketsHtml = a?.markets?.length ? `<div class="news-ai-markets">Affects: ${a.markets.join(' · ')}</div>` : '';
+    const aiHtml = a?.reasoning
+      ? `<div class="news-ai-box">${marketsHtml}${a.reasoning}</div>`
+      : '';
+    return `<div class="news-item" data-cat="${cat}">
+      <div class="news-item-title">${h.title}</div>
+      <div class="news-meta">
+        <span class="news-cat-tag" style="background:${color}22;color:${color}">${cat}</span>
+        ${impactCls ? `<span class="news-cat-tag ${impactCls}">${impact}</span>` : ''}
+        ${dirSymbol ? `<span class="${dirCls}" style="font-size:10px">${dirSymbol}</span>` : ''}
+        <span style="font-size:10px;color:var(--muted)">${h.source||''} · ${h.published?new Date(h.published).toUTCString().slice(5,22):''}</span>
+      </div>
+      ${aiHtml}
+    </div>`;
+  }).join('');
+}
+
+function renderHeadlines(headlines) {
+  _allHeadlines = headlines || [];
+  renderHeadlinesList();
+}
+
+function filterNews(cat) {
+  _newsFilter = cat;
+  document.querySelectorAll('.news-cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+  renderHeadlinesList();
+}
+
+async function loadNewsAnalysis() {
+  const el = document.getElementById('headlines-wrap');
+  if (el) el.innerHTML = '<div style="padding:16px;color:var(--muted)">Asking Claude to analyze headlines… (10–20s)</div>';
+  try {
+    const data = await fetch(`${API}/api/news/analysis`).then(r => r.json());
+    if (data.headlines) renderHeadlines(data.headlines);
+  } catch(e) {
+    if (el) el.innerHTML = `<div style="padding:16px;color:var(--red)">Analysis failed: ${e.message}</div>`;
+  }
 }
 
 // ── Render SMC ────────────────────────────────────────────────────────────────
@@ -1181,12 +1292,26 @@ async function refresh() {
     // ── Crypto page state update ──
     if (cryptoState) renderCryptoState(cryptoState);
     if (cryptoState?.account) {
-      const cb = cryptoState.account.balance || 0;
-      const cu = cryptoState.account.unrealizedPL || 0;
-      const cbEl = document.getElementById('crypto-balance');
-      if (cbEl) cbEl.textContent = '$' + cb.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-      const cuEl = document.getElementById('crypto-unrealized');
-      if (cuEl) cuEl.textContent = (cu>=0?'+':'')+cu.toFixed(2)+' unrealized';
+      const cb  = cryptoState.account.balance || 0;
+      const cu  = cryptoState.account.unrealizedPL || 0;
+      const cnav = cb + cu;
+      const el = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+      el('crypto-balance',   '$' + cb.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+      el('crypto-unrealized', (cu>=0?'+':'')+cu.toFixed(2)+' unrealized');
+      el('crypto-open',      cryptoState.account.openTrades || 0);
+      // paper stats
+      const ps = cryptoState.account;
+      el('crypto-pnl',   (cu>=0?'+$':'-$')+Math.abs(cu).toFixed(2));
+      el('crypto-trades', (cryptoState.account.openTrades||0)+' open now');
+      // Combined NAV
+      const forexNav = (acct ? (acct.balance||0)+(acct.unrealizedPL||0) : 0);
+      const combNav  = forexNav + cnav;
+      el('combined-nav', '$'+combNav.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+      el('combined-sub', 'forex $'+forexNav.toFixed(0)+' · crypto $'+cnav.toFixed(0));
+      // Update header open count to include crypto
+      const totalOpen = (posData?.trades?.length||0) + (cryptoPos?.trades?.length||0);
+      const hoEl = document.getElementById('h-open');
+      if (hoEl) hoEl.textContent = totalOpen;
     }
     if (cryptoPos?.trades) {
       const ct = cryptoPos.trades;
