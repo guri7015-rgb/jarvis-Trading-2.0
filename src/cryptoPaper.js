@@ -1,15 +1,13 @@
 /**
  * Crypto Paper Trading Engine
  *
- * Real market data from Bybit public API (no key needed, cloud-friendly).
+ * Candle data fetched from multiple providers with automatic fallback:
+ *   1. Bybit  (api.bybit.com)
+ *   2. OKX    (www.okx.com)
+ *   3. Kraken (api.kraken.com)
  * Execution is simulated locally — tracks virtual positions + P&L.
  */
 import https from 'https';
-
-const BYBIT_HOST = 'api.bybit.com';
-
-// Bybit interval codes
-const INTERVAL = { D: 'D', H4: '240', H1: '60', M15: '15', M5: '5' };
 
 export const CRYPTO_QTY_DEC = {
   BTCUSDT: 3, ETHUSDT: 3, SOLUSDT: 1, BNBUSDT: 2,
@@ -27,45 +25,105 @@ let _paperPositions = new Map();
 let _paperPnL       = 0;
 let _tradeCount     = 0;
 
-// ── Public HTTP ───────────────────────────────────────────────────────────────
-function get(path, params = {}, ms = 20_000) {
+// ── Generic HTTPS GET ─────────────────────────────────────────────────────────
+function httpsGet(hostname, path, ms = 20_000) {
   return new Promise((resolve, reject) => {
-    const qs = new URLSearchParams(params).toString();
-    const fullPath = qs ? `${path}?${qs}` : path;
-    const req = https.get({ hostname: BYBIT_HOST, path: fullPath,
-      headers: { 'User-Agent': 'JARVIS-Trading/2.0' } }, (res) => {
+    const req = https.get({ hostname, path, headers: { 'User-Agent': 'JARVIS-Trading/2.0' } }, (res) => {
       let data = '';
       res.on('data', c => data += c);
       res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.retCode !== 0) reject(new Error(`Bybit error ${parsed.retCode}: ${parsed.retMsg}`));
-          else resolve(parsed.result);
-        } catch(e) { reject(new Error(`Parse error: ${data.slice(0, 100)}`)); }
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch(e) { reject(new Error(`Parse error: ${data.slice(0, 80)}`)); }
       });
     });
-    req.setTimeout(ms, () => { req.destroy(); reject(new Error(`Timeout: ${path}`)); });
+    req.setTimeout(ms, () => { req.destroy(); reject(new Error(`Timeout ${hostname}`)); });
     req.on('error', reject);
   });
 }
 
-// ── Candles (real data from Bybit) ────────────────────────────────────────────
-export async function getCryptoCandles(symbol, granularity = 'H1', count = 150) {
-  const interval = INTERVAL[granularity] || '60';
-  const result = await get('/v5/market/kline', {
-    category: 'linear', symbol, interval, limit: Math.min(count + 1, 1000),
-  });
-  // Bybit returns newest-first — reverse to get chronological order
-  const list = (result.list || []).reverse();
-  return list.slice(0, -1).map(k => ({
-    time:   parseInt(k[0]),
-    open:   parseFloat(k[1]),
-    high:   parseFloat(k[2]),
-    low:    parseFloat(k[3]),
-    close:  parseFloat(k[4]),
-    volume: parseFloat(k[5]),
-    bid: null, ask: null, spread: null,
+// ── Provider implementations ──────────────────────────────────────────────────
+const BYBIT_IV  = { D: 'D',   H4: '240', H1: '60', M15: '15', M5: '5'  };
+const OKX_IV    = { D: '1D',  H4: '4H',  H1: '1H', M15: '15m', M5: '5m' };
+const KRAKEN_IV = { D: '1440',H4: '240', H1: '60', M15: '15', M5: '5'  };
+const KRAKEN_SYM = {
+  BTCUSDT: 'XBTUSDT', ETHUSDT: 'ETHUSDT', SOLUSDT: 'SOLUSDT',
+  BNBUSDT: 'BNBUSDT', XRPUSDT: 'XRPUSDT',
+};
+const OKX_SYM = {
+  BTCUSDT: 'BTC-USDT-SWAP', ETHUSDT: 'ETH-USDT-SWAP', SOLUSDT: 'SOL-USDT-SWAP',
+  BNBUSDT: 'BNB-USDT-SWAP', XRPUSDT: 'XRP-USDT-SWAP',
+};
+
+async function bybitCandles(symbol, granularity, count) {
+  const iv = BYBIT_IV[granularity] || '60';
+  const qs = `category=linear&symbol=${symbol}&interval=${iv}&limit=${Math.min(count + 1, 1000)}`;
+  const { status, body } = await httpsGet('api.bybit.com', `/v5/market/kline?${qs}`);
+  if (body.retCode !== 0) throw new Error(`Bybit ${body.retCode}: ${body.retMsg}`);
+  return (body.result.list || []).reverse().slice(0, -1).map(k => ({
+    time: +k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5],
   })).slice(-count);
+}
+
+async function okxCandles(symbol, granularity, count) {
+  const bar = OKX_IV[granularity] || '1H';
+  const inst = OKX_SYM[symbol] || `${symbol.replace('USDT','-USDT-SWAP')}`;
+  const qs = `instId=${inst}&bar=${bar}&limit=${Math.min(count + 1, 300)}`;
+  const { status, body } = await httpsGet('www.okx.com', `/api/v5/market/candles?${qs}`);
+  if (body.code !== '0') throw new Error(`OKX ${body.code}: ${body.msg}`);
+  return (body.data || []).reverse().slice(0, -1).map(k => ({
+    time: +k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5],
+  })).slice(-count);
+}
+
+async function krakenCandles(symbol, granularity, count) {
+  const interval = KRAKEN_IV[granularity] || '60';
+  const pair = KRAKEN_SYM[symbol] || symbol;
+  const qs = `pair=${pair}&interval=${interval}`;
+  const { status, body } = await httpsGet('api.kraken.com', `/0/public/OHLC?${qs}`);
+  if (body.error?.length) throw new Error(`Kraken: ${body.error[0]}`);
+  const key = Object.keys(body.result).find(k => k !== 'last');
+  const rows = body.result[key] || [];
+  return rows.slice(-count).map(k => ({
+    time: k[0] * 1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[6],
+  }));
+}
+
+let _workingProvider = null;  // cache which provider works
+
+async function fetchCandlesWithFallback(symbol, granularity, count) {
+  const providers = [
+    { name: 'bybit',  fn: bybitCandles  },
+    { name: 'okx',    fn: okxCandles    },
+    { name: 'kraken', fn: krakenCandles },
+  ];
+  // Try cached provider first
+  if (_workingProvider) {
+    const p = providers.find(p => p.name === _workingProvider);
+    if (p) {
+      try { return await p.fn(symbol, granularity, count); } catch {}
+    }
+  }
+  // Try all in order
+  for (const p of providers) {
+    try {
+      const candles = await p.fn(symbol, granularity, count);
+      if (candles.length > 0) {
+        if (_workingProvider !== p.name) {
+          _workingProvider = p.name;
+          process.stdout.write(`[CRYPTO DATA] Using provider: ${p.name}\n`);
+        }
+        return candles;
+      }
+    } catch(e) {
+      process.stdout.write(`[CRYPTO DATA] ${p.name} failed for ${symbol}: ${e.message}\n`);
+    }
+  }
+  return [];
+}
+
+// ── Candles ───────────────────────────────────────────────────────────────────
+export async function getCryptoCandles(symbol, granularity = 'H1', count = 150) {
+  return fetchCandlesWithFallback(symbol, granularity, count);
 }
 
 export async function getMultiCryptoCandles(symbols, granularity, count) {
@@ -73,21 +131,36 @@ export async function getMultiCryptoCandles(symbols, granularity, count) {
     symbols.map(s => getCryptoCandles(s, granularity, count).then(c => [s, c]))
   );
   const map = {};
-  for (const r of results) if (r.status === 'fulfilled') map[r.value[0]] = r.value[1];
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value[1].length > 0)
+      map[r.value[0]] = r.value[1];
+    else if (r.status === 'rejected')
+      process.stdout.write(`[CRYPTO DATA] ${granularity} fetch rejected: ${r.reason?.message}\n`);
+  }
   return map;
 }
 
-// ── Prices (real data from Bybit) ────────────────────────────────────────────
+// ── Prices ────────────────────────────────────────────────────────────────────
 export async function getCryptoPrices(symbols) {
   const map = {};
   await Promise.allSettled(symbols.map(async symbol => {
     try {
-      const result = await get('/v5/market/tickers', { category: 'linear', symbol });
-      const t = result.list?.[0];
-      if (!t) return;
-      const bid = parseFloat(t.bid1Price);
-      const ask = parseFloat(t.ask1Price);
-      map[symbol] = { bid, ask, mid: (bid + ask) / 2, spread: ask - bid };
+      // Try Bybit first, fall back to last candle close from any provider
+      let bid, ask;
+      try {
+        const qs = `category=linear&symbol=${symbol}`;
+        const { body } = await httpsGet('api.bybit.com', `/v5/market/tickers?${qs}`);
+        const t = body.result?.list?.[0];
+        if (t) { bid = +t.bid1Price; ask = +t.ask1Price; }
+      } catch {}
+      if (!bid) {
+        // OKX fallback
+        const inst = OKX_SYM[symbol] || symbol;
+        const { body } = await httpsGet('www.okx.com', `/api/v5/market/ticker?instId=${inst}`);
+        const t = body.data?.[0];
+        if (t) { bid = +t.bidPx; ask = +t.askPx; }
+      }
+      if (bid && ask) map[symbol] = { bid, ask, mid: (bid + ask) / 2, spread: ask - bid };
     } catch {}
   }));
   return map;
