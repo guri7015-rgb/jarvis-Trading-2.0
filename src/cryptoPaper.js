@@ -1,17 +1,15 @@
 /**
  * Crypto Paper Trading Engine
  *
- * Real market data from Binance public API (no key needed).
+ * Real market data from Bybit public API (no key needed, cloud-friendly).
  * Execution is simulated locally — tracks virtual positions + P&L.
- *
- * Drop-in replacement for binance.js for regions where exchanges
- * are restricted or for safe strategy testing.
  */
 import https from 'https';
 
-const BINANCE_PUBLIC = 'api.binance.com';
+const BYBIT_HOST = 'api.bybit.com';
 
-const INTERVAL = { D: '1d', H4: '4h', H1: '1h', M15: '15m', M5: '5m' };
+// Bybit interval codes
+const INTERVAL = { D: 'D', H4: '240', H1: '60', M15: '15', M5: '5' };
 
 export const CRYPTO_QTY_DEC = {
   BTCUSDT: 3, ETHUSDT: 3, SOLUSDT: 1, BNBUSDT: 2,
@@ -24,25 +22,25 @@ export const CRYPTO_PRICE_DEC = {
 };
 
 // ── Paper account state ───────────────────────────────────────────────────────
-let _paperBalance   = 10_000;   // virtual USDT starting balance
-let _paperPositions = new Map(); // symbol → position object
+let _paperBalance   = 10_000;
+let _paperPositions = new Map();
 let _paperPnL       = 0;
 let _tradeCount     = 0;
 
 // ── Public HTTP ───────────────────────────────────────────────────────────────
-function get(path, params = {}, ms = 15_000) {
+function get(path, params = {}, ms = 20_000) {
   return new Promise((resolve, reject) => {
     const qs = new URLSearchParams(params).toString();
     const fullPath = qs ? `${path}?${qs}` : path;
-    const req = https.get({ hostname: BINANCE_PUBLIC, path: fullPath,
+    const req = https.get({ hostname: BYBIT_HOST, path: fullPath,
       headers: { 'User-Agent': 'JARVIS-Trading/2.0' } }, (res) => {
       let data = '';
       res.on('data', c => data += c);
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
-          if (res.statusCode >= 400) reject(new Error(`Binance ${res.statusCode}: ${JSON.stringify(parsed).slice(0, 200)}`));
-          else resolve(parsed);
+          if (parsed.retCode !== 0) reject(new Error(`Bybit error ${parsed.retCode}: ${parsed.retMsg}`));
+          else resolve(parsed.result);
         } catch(e) { reject(new Error(`Parse error: ${data.slice(0, 100)}`)); }
       });
     });
@@ -51,12 +49,16 @@ function get(path, params = {}, ms = 15_000) {
   });
 }
 
-// ── Candles (real data) ───────────────────────────────────────────────────────
+// ── Candles (real data from Bybit) ────────────────────────────────────────────
 export async function getCryptoCandles(symbol, granularity = 'H1', count = 150) {
-  const interval = INTERVAL[granularity] || '1h';
-  const data = await get('/api/v3/klines', { symbol, interval, limit: Math.min(count + 1, 1000) });
-  return data.slice(0, -1).map(k => ({
-    time:   k[0],
+  const interval = INTERVAL[granularity] || '60';
+  const result = await get('/v5/market/kline', {
+    category: 'linear', symbol, interval, limit: Math.min(count + 1, 1000),
+  });
+  // Bybit returns newest-first — reverse to get chronological order
+  const list = (result.list || []).reverse();
+  return list.slice(0, -1).map(k => ({
+    time:   parseInt(k[0]),
     open:   parseFloat(k[1]),
     high:   parseFloat(k[2]),
     low:    parseFloat(k[3]),
@@ -75,14 +77,16 @@ export async function getMultiCryptoCandles(symbols, granularity, count) {
   return map;
 }
 
-// ── Prices (real data) ────────────────────────────────────────────────────────
+// ── Prices (real data from Bybit) ────────────────────────────────────────────
 export async function getCryptoPrices(symbols) {
   const map = {};
   await Promise.allSettled(symbols.map(async symbol => {
     try {
-      const t   = await get('/api/v3/ticker/bookTicker', { symbol });
-      const bid = parseFloat(t.bidPrice);
-      const ask = parseFloat(t.askPrice);
+      const result = await get('/v5/market/tickers', { category: 'linear', symbol });
+      const t = result.list?.[0];
+      if (!t) return;
+      const bid = parseFloat(t.bid1Price);
+      const ask = parseFloat(t.ask1Price);
       map[symbol] = { bid, ask, mid: (bid + ask) / 2, spread: ask - bid };
     } catch {}
   }));
