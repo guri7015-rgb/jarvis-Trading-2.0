@@ -140,11 +140,8 @@ export async function fullScan() {
 
     await syncClosedTrades();
 
-    if (isWeekend()) {
-      scanState = { ...scanState, scanning: false, lastScan: new Date().toISOString(),
-        signals: [], errors: [{ instrument: 'ALL', reason: 'Market closed — weekend' }] };
-      return { ok: true, signals: [], marketClosed: true };
-    }
+    // Weekend: forex markets are technically closed but demo mode scans anyway
+    // to observe strategy signals. Real execution may get OANDA errors on fills.
 
     const session   = getActiveSession();
     const sessScore = sessionScore();
@@ -202,7 +199,7 @@ export async function fullScan() {
         errors.push({ instrument, reason: `MTF confluence too low (${(confluence * 100).toFixed(0)}%) for ${signal.direction}` });
         continue;
       }
-      const confluenceBoost = Math.round((confluence - 0.5) * 20);  // up to +10 for 3/3 alignment
+      const confluenceBoost = Math.max(0, Math.round((confluence - 0.5) * 20));  // 0..+10, never negative
       signal.confidence = Math.min(95, signal.confidence + confluenceBoost);
       signal.mtfConfluence = +confluence.toFixed(2);
 

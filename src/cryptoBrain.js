@@ -9,6 +9,7 @@
  *   - 5x leverage on perpetuals
  */
 import { CRYPTO_INSTRUMENTS, CONFIG, READ_ONLY, DEMO_ENABLED } from './config.js';
+import { heatCheck } from './volatility.js';
 import { analyzeSignalWithClaude } from './news.js';
 import {
   getMultiCryptoCandles, getCryptoPrices, getCryptoAccount,
@@ -61,6 +62,10 @@ function calcUnits(symbol, entry, sl, h1) {
   const riskUSD = _balance * CONFIG.cryptoRiskPerTrade;
   const slDist  = Math.abs(entry - sl);
   if (slDist === 0) return 0;
+
+  // Portfolio heat cap — same guard as forex
+  const heat = heatCheck(_balance, riskUSD, CONFIG.maxPortfolioHeat);
+  if (!heat.ok) return 0;
 
   const atrPct = atrPercentile(h1, 100);
   const vol    = getVolRegime(atrPct);

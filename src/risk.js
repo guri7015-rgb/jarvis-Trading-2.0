@@ -176,8 +176,8 @@ export function onTradeClosed(instrument, pnl) {
   state.openCount = Math.max(0, state.openCount - 1);
   state.openInstruments = state.openInstruments.filter((i) => i !== instrument);
   state.dailyRealizedPL += pnl;
-  if (pnl > 0) { state.consecutiveWins++; state.consecutiveLosses = 0; }
-  else         { state.consecutiveLosses++; state.consecutiveWins = 0; }
+  if (pnl >= 0) { state.consecutiveWins++; state.consecutiveLosses = 0; }  // break-even = win
+  else          { state.consecutiveLosses++; state.consecutiveWins = 0; }
 
   const tradeId = state.openTradeIds[instrument];
   if (tradeId) {
