@@ -1791,59 +1791,65 @@ function fmtCountdown(ms){
 }
 
 function tickSessions(){
-  const now = new Date();
-  const utcH = now.getUTCHours(), utcM = now.getUTCMinutes(), utcS = now.getUTCSeconds();
-  const utcMins = utcH*60 + utcM;
+  try {
+    const now = new Date();
+    const DAY_SECS = 24 * 3600;
+    // Current position in the UTC day, in seconds
+    const nowSecs = now.getUTCHours()*3600 + now.getUTCMinutes()*60 + now.getUTCSeconds();
 
-  SESSIONS.forEach(s => {
-    const localTime = now.toLocaleTimeString('en-GB',{timeZone:s.tz,hour:'2-digit',minute:'2-digit',second:'2-digit'});
-    document.getElementById('sess-'+s.id+'-time').textContent = localTime;
+    SESSIONS.forEach(s => {
+      const localTime = now.toLocaleTimeString('en-GB',{timeZone:s.tz,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      document.getElementById('sess-'+s.id+'-time').textContent = localTime;
 
-    // Is session open?
-    const isWraparound = s.open > s.close; // sydney wraps midnight
-    const openMins  = s.open  * 60;
-    const closeMins = s.close * 60;
-    let isOpen;
-    if (isWraparound) isOpen = utcMins >= openMins || utcMins < closeMins;
-    else              isOpen = utcMins >= openMins && utcMins < closeMins;
+      const openSecs  = s.open  * 3600;
+      const closeSecs = s.close * 3600;
+      const isWraparound = s.open > s.close; // e.g. Sydney 22:00–07:00
 
-    const badge   = document.getElementById('sess-'+s.id+'-badge');
-    const cdEl    = document.getElementById('sess-'+s.id+'-cd');
-    const cardEl  = document.getElementById('sess-'+s.id);
+      let isOpen;
+      if (isWraparound) isOpen = nowSecs >= openSecs || nowSecs < closeSecs;
+      else              isOpen = nowSecs >= openSecs && nowSecs < closeSecs;
 
-    if (isOpen) {
-      badge.textContent = 'OPEN';
-      badge.className   = 'badge badge-live';
-      cardEl.style.borderColor = 'var(--green)';
-      // countdown to close
-      let closeTotalMins = closeMins;
-      if (isWraparound && utcMins >= openMins) closeTotalMins += 24*60;
-      const msToClose = (closeTotalMins - utcMins)*60_000 - utcS*1000;
-      cdEl.textContent = 'Closes in ' + fmtCountdown(msToClose);
-    } else {
-      badge.textContent = 'CLOSED';
-      badge.className   = 'badge badge-ro';
-      cardEl.style.borderColor = 'var(--border)';
-      // countdown to open
-      let openTotalMins = openMins;
-      if (utcMins >= openMins && !isWraparound) openTotalMins += 24*60;
-      if (isWraparound && utcMins >= closeMins && utcMins < openMins) openTotalMins = openMins;
-      if (isWraparound && utcMins < closeMins) openTotalMins = openMins; // already past midnight
-      let msToOpen = (openTotalMins - utcMins)*60_000 - utcS*1000;
-      if (msToOpen < 0) msToOpen += 24*3600_000;
-      cdEl.textContent = 'Opens in ' + fmtCountdown(msToOpen);
-    }
+      const badge  = document.getElementById('sess-'+s.id+'-badge');
+      const cdEl   = document.getElementById('sess-'+s.id+'-cd');
+      const cardEl = document.getElementById('sess-'+s.id);
 
-    // Highlight overlap (London + NY both open: 12-16 UTC)
-    if (s.id === 'london' || s.id === 'newyork') {
-      const overlap = utcMins >= 12*60 && utcMins < 16*60;
-      if (overlap && isOpen) {
-        badge.textContent = 'OVERLAP';
-        badge.style.background = 'linear-gradient(135deg,#fef3c7,#fde68a)';
-        badge.style.color = '#92400e';
+      if (isOpen) {
+        badge.textContent = 'OPEN';
+        badge.className   = 'badge badge-live';
+        cardEl.style.borderColor = 'var(--green)';
+
+        // Seconds until close — if wraparound and we're in the after-midnight segment,
+        // closeSecs is already ahead of nowSecs; if we're in the before-midnight segment,
+        // add a full day to closeSecs.
+        let closeAt = closeSecs;
+        if (isWraparound && nowSecs >= openSecs) closeAt += DAY_SECS; // e.g. 22:30 → close at 07:00+24h
+        let secsLeft = closeAt - nowSecs;
+        if (secsLeft < 0) secsLeft += DAY_SECS;
+        cdEl.textContent = 'Closes in ' + fmtCountdown(secsLeft * 1000);
+      } else {
+        badge.textContent = 'CLOSED';
+        badge.className   = 'badge badge-ro';
+        cardEl.style.borderColor = 'var(--border)';
+
+        // Seconds until next open
+        let openAt = openSecs;
+        if (nowSecs >= openSecs) openAt += DAY_SECS; // already passed today's open → next day
+        let secsLeft = openAt - nowSecs;
+        if (secsLeft < 0) secsLeft += DAY_SECS;
+        cdEl.textContent = 'Opens in ' + fmtCountdown(secsLeft * 1000);
       }
-    }
-  });
+
+      // London + NY overlap highlight (12:00–16:00 UTC)
+      if ((s.id === 'london' || s.id === 'newyork') && isOpen) {
+        const inOverlap = nowSecs >= 12*3600 && nowSecs < 16*3600;
+        if (inOverlap) {
+          badge.textContent = 'OVERLAP';
+          badge.style.background = 'linear-gradient(135deg,#fef3c7,#fde68a)';
+          badge.style.color = '#92400e';
+        }
+      }
+    });
+  } catch(e) { /* silent — don't crash the clock */ }
 }
 
 tickSessions();

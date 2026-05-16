@@ -294,31 +294,35 @@ server.listen(PORT, () => {
 });
 
 // Auto-scan + auto-execute: Forex every 60s, Crypto every 90s (offset by 30s)
+// Both loops drain ALL signals found per cycle, not just the top one.
 setInterval(async () => {
   try {
     const result = await fullScan();
-    if (result?.signals?.length > 0) {
+    if (!result?.signals?.length) return;
+    let execCount = 0;
+    while (true) {
       const exec = await executeTopSignal();
-      if (exec.executed)
-        process.stdout.write(`[FOREX AUTO] ${exec.instrument} ${exec.direction} ${exec.units}u @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
-      else if (exec.reason)
-        process.stdout.write(`[FOREX] No exec: ${exec.reason}\n`);
+      if (!exec.executed) break;
+      execCount++;
+      process.stdout.write(`[FOREX AUTO #${execCount}] ${exec.instrument} ${exec.direction} ${exec.units}u @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
     }
+    if (!execCount) process.stdout.write(`[FOREX] ${result.signals.length} signals, none executed\n`);
   } catch (e) { process.stdout.write(`[FOREX AUTO] Error: ${e.message}\n`); }
 }, 60_000);
 
 setTimeout(() => {
   setInterval(async () => {
-    // crypto paper trading — always run (no API key required)
     try {
       const result = await cryptoFullScan();
-      if (result?.signals?.length > 0) {
+      if (!result?.signals?.length) return;
+      let execCount = 0;
+      while (true) {
         const exec = await executeCryptoTopSignal();
-        if (exec.executed)
-          process.stdout.write(`[CRYPTO AUTO] ${exec.instrument} ${exec.direction} ${exec.units} @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
-        else if (exec.reason)
-          process.stdout.write(`[CRYPTO] No exec: ${exec.reason}\n`);
+        if (!exec.executed) break;
+        execCount++;
+        process.stdout.write(`[CRYPTO AUTO #${execCount}] ${exec.instrument} ${exec.direction} ${exec.units} @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
       }
+      if (!execCount) process.stdout.write(`[CRYPTO] ${result.signals.length} signals, none executed\n`);
     } catch (e) { process.stdout.write(`[CRYPTO AUTO] Error: ${e.message}\n`); }
   }, 90_000);
 }, 30_000);  // offset 30s from forex scan
