@@ -1157,6 +1157,39 @@ function fmtDuration(openTime, closeTime) {
   return `${m}m`;
 }
 
+// ── Trade size / risk helpers ─────────────────────────────────────────────────
+const _PIP = { EUR_USD:.0001,GBP_USD:.0001,USD_JPY:.01,USD_CHF:.0001,
+               AUD_USD:.0001,USD_CAD:.0001,NZD_USD:.0001,XAU_USD:.10 };
+const _PIP_VAL = { USD_JPY:0.0909, XAU_USD:1.0 }; // per pip per 1k units; default 0.10
+
+function calcTradeRisk(t) {
+  const units  = Math.abs(t.units || 0);
+  const entry  = t.openPrice  || 0;
+  const sl     = t.sl;
+  const isCrypto = t.market === 'crypto';
+
+  let riskUsd = null, notional = null, sizeLabel = null;
+
+  if (isCrypto) {
+    // Crypto: straightforward USDT math
+    notional  = +(units * entry).toFixed(2);
+    riskUsd   = sl ? +(Math.abs(entry - sl) * units).toFixed(2) : null;
+    const sym = (t.instrument || '').replace('USDT','');
+    sizeLabel = `${units} ${sym}`;
+  } else {
+    // Forex: pip-based sizing
+    const pip    = _PIP[t.instrument] || 0.0001;
+    const pipVal = _PIP_VAL[t.instrument] || 0.10;  // USD per pip per 1k units
+    const k      = units / 1000;
+    riskUsd   = sl ? +(Math.abs(entry - sl) / pip * pipVal * k).toFixed(2) : null;
+    const lots = units / 100_000;
+    notional  = +(units * entry).toFixed(0);
+    sizeLabel = lots >= 0.1 ? `${lots.toFixed(2)} lots` : lots >= 0.01 ? `${(lots*10).toFixed(2)} mini` : `${(lots*100).toFixed(2)} micro`;
+  }
+
+  return { riskUsd, notional, sizeLabel };
+}
+
 // ── Position table builder ────────────────────────────────────────────────────
 function buildPositionTable(trades) {
   if (!trades.length)
@@ -1165,22 +1198,24 @@ function buildPositionTable(trades) {
   trades.forEach(t => { _tradeStore[t.id] = t; });
 
   return `<table><thead><tr>
-    <th>Pair</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>P&L</th><th>R:R</th><th>Strategy</th><th>Opened</th><th></th>
+    <th>Pair</th><th>Dir</th><th>Size</th><th>$ at Risk</th><th>Entry</th><th>SL</th><th>TP</th><th>Unrealized P&L</th><th>R:R</th><th>Strategy</th><th></th>
   </tr></thead><tbody>${trades.map(t => {
     const dir = t.direction || (t.units > 0 ? 'LONG' : 'SHORT');
     const pnl = t.unrealizedPL || 0;
     const c   = parseComment(t.clientComment);
     const rr  = t.sl && t.tp ? Math.abs((t.tp - t.openPrice)/(t.openPrice - t.sl)).toFixed(2) : '—';
+    const { riskUsd, sizeLabel } = calcTradeRisk(t);
     return `<tr style="cursor:pointer" onclick="openTradeModal('${t.id}')" title="Click for full details">
       <td><b>${t.instrument}</b></td>
       <td><span class="tag tag-${dir.toLowerCase()}">${dir}</span></td>
+      <td style="font-family:var(--mono);font-size:11px">${sizeLabel}</td>
+      <td style="color:var(--red);font-weight:700">${riskUsd != null ? '$'+riskUsd.toFixed(2) : '—'}</td>
       <td>${fmtPrice(t.openPrice,t.market)}</td>
       <td class="red">${fmtPrice(t.sl,t.market)}</td>
       <td class="green">${fmtPrice(t.tp,t.market)}</td>
-      <td class="${pnl>=0?'green':'red'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
+      <td class="${pnl>=0?'green':'red'}" style="font-weight:700">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
       <td class="blue">${rr}</td>
       <td style="font-family:var(--mono);font-size:10px;color:var(--primary)">${(c.strategy||'—').replace(/_/g,' ')}</td>
-      <td class="muted">${t.openTime?.slice(0,10)||'—'}</td>
       <td style="color:var(--primary);font-size:18px;text-align:center;opacity:.6">⊕</td>
     </tr>`;
   }).join('')}</tbody></table>`;
@@ -1216,22 +1251,24 @@ function buildHistoryTable(trades) {
     const dur    = fmtDuration(t.openTime, t.closeTime);
     const dateStr = t.closeTime?.slice(0, 10) || t.openTime?.slice(0, 10) || '—';
     const strategy = (c.strategy || '—').replace(/_/g, ' ');
+    const { riskUsd, sizeLabel } = calcTradeRisk(t);
     return `<tr style="cursor:pointer;opacity:.92" onclick="openTradeModal('${t.id}')" title="Click for full details">
       <td><b>${t.instrument}</b></td>
       <td><span class="tag tag-${dir.toLowerCase()}">${dir}</span></td>
+      <td style="font-family:var(--mono);font-size:11px">${sizeLabel}</td>
+      <td style="color:var(--red);font-weight:700">${riskUsd != null ? '$'+riskUsd.toFixed(2) : '—'}</td>
       <td>${fmtPrice(t.openPrice, t.market)}</td>
       <td>${fmtPrice(t.closePrice, t.market)}</td>
       <td class="${pnl>=0?'green':'red'}" style="font-weight:700">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
       <td style="color:${reasonColor};font-weight:700;font-size:10px">${reason}</td>
       <td class="muted">${dur}</td>
       <td style="font-family:var(--mono);font-size:10px;color:var(--primary)">${strategy}</td>
-      <td class="muted">${dateStr}</td>
       <td style="color:var(--primary);font-size:18px;text-align:center;opacity:.6">⊕</td>
     </tr>`;
   }).join('');
 
   return summary + `<div style="overflow-x:auto"><table><thead><tr>
-    <th>Pair</th><th>Dir</th><th>Entry</th><th>Close</th><th>P&L</th><th>Reason</th><th>Duration</th><th>Strategy</th><th>Date</th><th></th>
+    <th>Pair</th><th>Dir</th><th>Size</th><th>$ at Risk</th><th>Entry</th><th>Close</th><th>P&L</th><th>Reason</th><th>Duration</th><th>Strategy</th><th></th>
   </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
