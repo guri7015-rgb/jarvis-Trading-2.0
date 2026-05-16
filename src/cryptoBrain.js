@@ -140,8 +140,14 @@ export async function cryptoFullScan() {
       const _atr = eH1[eH1.length - 1]?.atr || 0.001;
       const _smc = smcSignal(symbol, eH1, _atr);          if (_smc) candidates.push(_smc);
       const signal = candidates.sort((a, b) => b.confidence - a.confidence)[0] || null;
-      if (!signal) continue;
-      if (signal.confidence < CONFIG.minConfidence) continue;
+      if (!signal) {
+        errors.push({ instrument: symbol, reason: 'No strategy signal (ADX/RSI/structure not met)' });
+        continue;
+      }
+      if (signal.confidence < 58) {  // slightly lower threshold for crypto
+        errors.push({ instrument: symbol, reason: `Confidence too low (${signal.confidence}%)` });
+        continue;
+      }
 
       // MTF confluence
       const conf = mtfConfluence(eD1, eH4, eH1, signal.direction);

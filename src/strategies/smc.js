@@ -312,9 +312,27 @@ export function smcSignal(instrument, candles, atr) {
     else if (bearFVGs.length) { entryZone = bearFVGs[0]; entryType = 'FVG'; }
   }
 
-  if (!entryZone) return null;
-
   const direction = bullBias ? 'LONG' : 'SHORT';
+
+  // If no OB/FVG in range, fall back to BOS market entry at current price
+  if (!entryZone) {
+    const entryPrice = price;
+    const sl  = direction === 'LONG' ? price - atr * CONFIG.atrSlMult : price + atr * CONFIG.atrSlMult;
+    const tp  = direction === 'LONG' ? price + atr * CONFIG.atrTpMult : price - atr * CONFIG.atrTpMult;
+    const rr  = +(Math.abs(tp - entryPrice) / Math.abs(entryPrice - sl)).toFixed(2);
+    if (rr < CONFIG.minRR) return null;
+    const confidence = struct.type.startsWith('BOS') ? 63 : 60;
+    return {
+      instrument, direction,
+      entry: +entryPrice.toFixed(5), sl: +sl.toFixed(5), tp: +tp.toFixed(5), rr,
+      confidence: Math.min(confidence, 75),
+      strategy: 'smc_bos',
+      structure: struct.type,
+      pdZone: pd.zone, pdPct: pd.pct,
+      reasoning: `${struct.type} market entry | ${pd.zone} zone (${(pd.pct*100).toFixed(0)}%) | no OB/FVG nearby`,
+    };
+  }
+
   // LONG: enter near bottom of zone (cheaper fill); SHORT: near top (better short entry)
   const entryPrice = direction === 'LONG'
     ? entryZone.bottom + (entryZone.top - entryZone.bottom) * 0.25
