@@ -173,7 +173,7 @@ export async function cryptoFullScan() {
         process.stdout.write(`[CRYPTO SCAN] ${symbol}: SKIP — ${reason}\n`);
         continue;
       }
-      signal.confidence    = Math.min(95, signal.confidence + Math.round((conf - 0.5) * 20));
+      signal.confidence    = Math.min(95, signal.confidence + Math.max(0, Math.round((conf - 0.5) * 20)));
       signal.mtfConfluence = +conf.toFixed(2);
 
       // Volatility check

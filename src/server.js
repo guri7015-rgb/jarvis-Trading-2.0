@@ -306,36 +306,53 @@ server.listen(PORT, () => {
 `);
 });
 
-// Auto-scan + auto-execute: Forex every 60s, Crypto every 90s (offset by 30s)
-// Both loops drain ALL signals found per cycle, not just the top one.
-setInterval(async () => {
+// ── Auto-scan + execute loops ─────────────────────────────────────────────────
+// Each loop runs immediately on server start, then repeats on its interval.
+// Both drain ALL queued signals per cycle.
+
+async function runForexCycle() {
   try {
     const result = await fullScan();
-    if (!result?.signals?.length) return;
+    const n = result?.signals?.length || 0;
+    process.stdout.write(`[FOREX SCAN] ${n} signal(s) found\n`);
+    if (!n) return;
     let execCount = 0;
     while (true) {
       const exec = await executeTopSignal();
-      if (!exec.executed) break;
+      if (!exec.executed) { process.stdout.write(`[FOREX] no exec: ${exec.reason}\n`); break; }
       execCount++;
       process.stdout.write(`[FOREX AUTO #${execCount}] ${exec.instrument} ${exec.direction} ${exec.units}u @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
     }
-    if (!execCount) process.stdout.write(`[FOREX] ${result.signals.length} signals, none executed\n`);
+    if (!execCount) process.stdout.write(`[FOREX] ${n} signals — none executed (blocked by risk/news/read-only)\n`);
   } catch (e) { process.stdout.write(`[FOREX AUTO] Error: ${e.message}\n`); }
-}, 60_000);
+}
+
+async function runCryptoCycle() {
+  try {
+    const result = await cryptoFullScan();
+    const n = result?.signals?.length || 0;
+    process.stdout.write(`[CRYPTO SCAN] ${n} signal(s) | errors: ${result?.errors?.length || 0}\n`);
+    if (result?.errors?.length) {
+      result.errors.slice(0, 3).forEach(e =>
+        process.stdout.write(`[CRYPTO SKIP] ${e.instrument}: ${e.reason}\n`));
+    }
+    if (!n) return;
+    let execCount = 0;
+    while (true) {
+      const exec = await executeCryptoTopSignal();
+      if (!exec.executed) { process.stdout.write(`[CRYPTO] no exec: ${exec.reason}\n`); break; }
+      execCount++;
+      process.stdout.write(`[CRYPTO AUTO #${execCount}] ${exec.instrument} ${exec.direction} ${exec.units} @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
+    }
+    if (!execCount) process.stdout.write(`[CRYPTO] ${n} signals — none executed (blocked)\n`);
+  } catch (e) { process.stdout.write(`[CRYPTO AUTO] Error: ${e.message}\n${e.stack?.split('\n').slice(0,3).join('\n')}\n`); }
+}
+
+// Run immediately, then on interval
+runForexCycle();
+setInterval(runForexCycle,  60_000);
 
 setTimeout(() => {
-  setInterval(async () => {
-    try {
-      const result = await cryptoFullScan();
-      if (!result?.signals?.length) return;
-      let execCount = 0;
-      while (true) {
-        const exec = await executeCryptoTopSignal();
-        if (!exec.executed) break;
-        execCount++;
-        process.stdout.write(`[CRYPTO AUTO #${execCount}] ${exec.instrument} ${exec.direction} ${exec.units} @ ${exec.entry} (${exec.strategy} ${exec.confidence}%)\n`);
-      }
-      if (!execCount) process.stdout.write(`[CRYPTO] ${result.signals.length} signals, none executed\n`);
-    } catch (e) { process.stdout.write(`[CRYPTO AUTO] Error: ${e.message}\n`); }
-  }, 90_000);
-}, 30_000);  // offset 30s from forex scan
+  runCryptoCycle();             // first crypto run 15s after server start
+  setInterval(runCryptoCycle, 90_000);
+}, 15_000);  // small offset so forex & crypto don't compete for CPU on first boot

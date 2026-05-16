@@ -1925,13 +1925,14 @@ async function safeRefresh() {
 
 refresh();
 refreshBrokers();
-triggerScan();
+triggerScan();          // forex scan immediately on load
+triggerCryptoScan();    // crypto scan immediately on load (was missing — was waiting 90s!)
 safeRefresh();
 fetchTradeHistory();
 setInterval(triggerScan,        60_000);
 setInterval(refreshBrokers,     30_000);
 setInterval(triggerCryptoScan,  90_000);
-setInterval(fetchTradeHistory, 120_000); // refresh history every 2 min
+setInterval(fetchTradeHistory, 120_000);
 window.addEventListener('resize', drawEquity);
 
 // ── Session clocks ────────────────────────────────────────────────────────────
