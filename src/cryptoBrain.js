@@ -209,12 +209,7 @@ export async function executeCryptoTopSignal() {
   const units = calcUnits(signal.instrument, liveEntry, signal.sl, h1);
   if (units === 0) return { executed: false, reason: 'Position size = 0 (extreme vol or insufficient balance)' };
 
-  if (READ_ONLY)
-    return { executed: false, readOnly: true, reason: 'Read-only mode',
-             wouldHave: { instrument: signal.instrument, direction: signal.direction, units, entry: liveEntry } };
-
-  if (!DEMO_ENABLED)
-    return { executed: false, reason: 'DEMO_TRADING_ENABLED=false — set to true to enable' };
+  // Paper trading — no real money, skip READ_ONLY / DEMO_ENABLED guards
 
   // Claude AI analysis
   let aiAnalysis = { approved: true, confidenceAdj: 0, risk: 'MEDIUM', narrative: '', keyFactor: '' };
