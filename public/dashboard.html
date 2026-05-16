@@ -219,8 +219,12 @@ canvas{display:block;width:100%}
   <div class="nav-item" onclick="showPage('smc',this)">
     <div class="nav-icon">🔬</div> SMC Analysis
   </div>
-  <div class="nav-item" onclick="showPage('crypto',this)" style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px">
-    <div class="nav-icon">₿</div> Crypto
+  <div class="nav-section">System</div>
+  <div class="nav-item" onclick="showPage('brokers',this)">
+    <div class="nav-icon">🔗</div> Brokers
+  </div>
+  <div class="nav-item" onclick="showPage('crypto',this)">
+    <div class="nav-icon">₿</div> Crypto Controls
   </div>
 </nav>
 
@@ -288,9 +292,9 @@ canvas{display:block;width:100%}
   <!-- ══ PAGE: Signals ══ -->
   <div class="page" id="page-signals">
     <div class="section-title">Live Signals</div>
-    <div class="section-sub">High-confidence trade opportunities across all instruments</div>
+    <div class="section-sub">Forex (OANDA) + Crypto (Binance) signals unified — AI-analyzed before execution</div>
     <div class="card">
-      <div class="card-hdr"><span><span class="pulse"></span>Signals</span><span id="signal-count2" class="purple">0 found</span></div>
+      <div class="card-hdr"><span><span class="pulse"></span>All Signals</span><span id="signal-count2" class="purple">0 found</span></div>
       <div style="padding:0" id="signals-wrap2"><div style="padding:24px;text-align:center;color:var(--muted)">Scanning…</div></div>
     </div>
   </div>
@@ -314,16 +318,20 @@ canvas{display:block;width:100%}
   <!-- ══ PAGE: Regime ══ -->
   <div class="page" id="page-regime">
     <div class="section-title">Market Regime</div>
-    <div class="section-sub">ADX-based regime classification per instrument</div>
+    <div class="section-sub">ADX-based regime classification — Forex + Crypto</div>
     <div class="grid2">
       <div class="card">
-        <div class="card-hdr">Regime Per Instrument</div>
+        <div class="card-hdr">Forex Regime</div>
         <div class="card-body" id="regime-wrap2"></div>
       </div>
       <div class="card">
-        <div class="card-hdr">Volatility Regimes</div>
-        <div class="card-body" id="vol-regime-full"></div>
+        <div class="card-hdr">Crypto Regime</div>
+        <div class="card-body" id="crypto-regime-wrap2" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px"></div>
       </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">Volatility Regimes</div>
+      <div class="card-body" id="vol-regime-full"></div>
     </div>
   </div>
 
@@ -408,7 +416,7 @@ canvas{display:block;width:100%}
   <!-- ══ PAGE: Positions ══ -->
   <div class="page" id="page-positions">
     <div class="section-title">Open Positions</div>
-    <div class="section-sub">All live trades from your OANDA account</div>
+    <div class="section-sub">OANDA (Forex) + Binance (Crypto) live trades unified — click any row for AI reasoning</div>
     <div class="card">
       <div style="padding:0" id="positions-wrap2"><div style="padding:24px;text-align:center;color:var(--muted)">No open positions</div></div>
     </div>
@@ -430,6 +438,110 @@ canvas{display:block;width:100%}
     <div class="section-title">SMC Analysis</div>
     <div class="section-sub">Smart Money Concepts — Order Blocks, FVGs, Structure</div>
     <div id="smc-detail-wrap2"><div style="color:var(--muted);padding:24px">No SMC signals in current scan</div></div>
+  </div>
+
+  <!-- ══ PAGE: Brokers ══ -->
+  <div class="page" id="page-brokers">
+    <div class="section-title">Broker Status</div>
+    <div class="section-sub">Live connection health for all trading brokers</div>
+
+    <div class="grid2" style="margin-bottom:16px">
+      <!-- OANDA card -->
+      <div class="card">
+        <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">📈</span> OANDA Forex
+          <span id="oanda-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-left:auto;animation:pulse 2s infinite"></span>
+          <span id="oanda-status-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:#f1f5f9;color:var(--muted)">Checking…</span>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Balance</div>
+              <div id="oanda-balance" style="font-family:var(--mono);font-size:18px;font-weight:800;color:var(--primary)">—</div>
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Unrealized P&L</div>
+              <div id="oanda-unrealized" style="font-family:var(--mono);font-size:18px;font-weight:800">—</div>
+            </div>
+          </div>
+          <div style="font-size:11px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--muted)">Account ID</span><span id="oanda-acct-id" style="font-family:var(--mono);font-weight:600">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--muted)">Environment</span><span id="oanda-env" style="font-family:var(--mono);font-weight:600">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--muted)">Open Trades</span><span id="oanda-open" style="font-family:var(--mono);font-weight:600">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--muted)">Ping</span><span id="oanda-ping" style="font-family:var(--mono);font-weight:600;color:var(--green)">—</span>
+            </div>
+          </div>
+          <div id="oanda-error" style="display:none;margin-top:10px;padding:8px 12px;background:#fee2e2;border-radius:8px;font-size:11px;color:#991b1b"></div>
+        </div>
+      </div>
+
+      <!-- Binance card -->
+      <div class="card">
+        <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">₿</span> Binance Futures
+          <span id="binance-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-left:auto;animation:pulse 2s infinite"></span>
+          <span id="binance-status-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:#f1f5f9;color:var(--muted)">Checking…</span>
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Balance (USDT)</div>
+              <div id="binance-balance" style="font-family:var(--mono);font-size:18px;font-weight:800;color:#f7931a">—</div>
+            </div>
+            <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Unrealized P&L</div>
+              <div id="binance-unrealized" style="font-family:var(--mono);font-size:18px;font-weight:800">—</div>
+            </div>
+          </div>
+          <div style="font-size:11px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--muted)">Mode</span><span id="binance-mode" style="font-family:var(--mono);font-weight:600">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--muted)">Configured</span><span id="binance-configured" style="font-family:var(--mono);font-weight:600">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--muted)">Open Positions</span><span id="binance-open" style="font-family:var(--mono);font-weight:600">—</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="color:var(--muted)">Ping</span><span id="binance-ping" style="font-family:var(--mono);font-weight:600;color:var(--green)">—</span>
+            </div>
+          </div>
+          <div id="binance-error" style="display:none;margin-top:10px;padding:8px 12px;background:#fee2e2;border-radius:8px;font-size:11px;color:#991b1b"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Status card -->
+    <div class="card">
+      <div class="card-hdr"><span>🧠 Claude AI Intelligence</span><span id="ai-status-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:#ede9fe;color:#5b21b6">Checking…</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Role</div>
+            <div style="font-size:12px;font-weight:700;color:var(--primary)">Signal Analyst</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Model</div>
+            <div style="font-size:12px;font-weight:700;font-family:var(--mono)" id="ai-model-name">claude-sonnet-4-6</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Function</div>
+            <div style="font-size:12px;font-weight:700;color:var(--green)">Full Analysis + Veto</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:10px 14px;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border-radius:10px;font-size:11px;line-height:1.6;color:#5b21b6">
+          Claude analyzes every trade signal before execution: evaluates regime fit, currency strength alignment, MTF confluence, news risk, and R:R. It adjusts confidence (±20%) and can veto bad setups. The AI narrative is stored in each position and visible when you click on a trade.
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ══ PAGE: Crypto ══ -->
@@ -549,30 +661,42 @@ function updateModeBadge(config) {
   else           { el.textContent = 'LIVE';      el.className = 'badge badge-live'; }
 }
 
-// ── Render signals ────────────────────────────────────────────────────────────
+// ── Price formatter (forex 5dp, crypto 2dp) ───────────────────────────────────
+function fmtPrice(p, market) {
+  if (p == null) return '—';
+  return market === 'crypto' ? p.toFixed(2) : p.toFixed(5);
+}
+
+// ── Render signals (forex + crypto unified) ───────────────────────────────────
 function renderSignals(signals) {
+  const total = signals.length;
   ['signal-count','signal-count2'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.textContent = signals.length + ' found';
+    if (el) el.textContent = total + ' found';
   });
-  document.getElementById('h-signals').textContent = signals.length;
+  document.getElementById('h-signals').textContent = total;
 
-  const html = !signals.length
-    ? '<div style="padding:24px;text-align:center;color:var(--muted)">No signals — market scanning…</div>'
+  const html = !total
+    ? '<div style="padding:24px;text-align:center;color:var(--muted)">No signals — markets scanning…</div>'
     : `<table><thead><tr>
-        <th>Pair</th><th>Dir</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Strategy</th><th>MTF</th>
+        <th>Market</th><th>Pair</th><th>Dir</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Strategy</th><th>MTF</th>
       </tr></thead><tbody>${signals.map(s => {
-        const isSmc = s.strategy === 'smc';
-        const conf_color = s.confidence>=80?'var(--green)':s.confidence>=70?'var(--blue)':'var(--yellow)';
+        const isCrypto = s.market === 'crypto';
+        const isSmc    = s.strategy === 'smc';
+        const cc = s.confidence>=80?'var(--green)':s.confidence>=70?'var(--blue)':'var(--yellow)';
+        const mktBadge = isCrypto
+          ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">CRYPTO</span>'
+          : '<span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">FOREX</span>';
         return `<tr>
+          <td>${mktBadge}</td>
           <td><b>${s.instrument}</b></td>
           <td><span class="tag tag-${s.direction.toLowerCase()}">${s.direction}</span></td>
-          <td><span style="font-weight:700;color:${conf_color}">${s.confidence}%</span></td>
-          <td style="color:var(--primary)">${(s.entryLimit||s.entry)?.toFixed(5)||'—'} <span style="font-size:9px;color:var(--muted)">${isSmc?'LMT':'MKT'}</span></td>
-          <td class="red">${s.sl?.toFixed(5)||'—'}</td>
-          <td class="green">${s.tp?.toFixed(5)||'—'}</td>
-          <td class="blue">${s.rr}</td>
-          <td><span class="tag ${isSmc?'tag-smc':'tag-bull'}" style="font-size:9px">${s.strategy}</span>${s.entryType?` <span style="font-size:9px;color:var(--muted)">${s.entryType}</span>`:''}</td>
+          <td><span style="font-weight:700;color:${cc}">${s.confidence}%</span></td>
+          <td style="color:var(--primary)">${fmtPrice(s.entryLimit||s.entry, s.market)} <span style="font-size:9px;color:var(--muted)">${isSmc?'LMT':'MKT'}</span></td>
+          <td class="red">${fmtPrice(s.sl, s.market)}</td>
+          <td class="green">${fmtPrice(s.tp, s.market)}</td>
+          <td class="blue">${s.rr||'—'}</td>
+          <td><span class="tag ${isSmc?'tag-smc':'tag-bull'}" style="font-size:9px">${s.strategy}</span></td>
           <td style="font-size:10px;color:${s.mtfConfluence>=.66?'var(--green)':s.mtfConfluence>=.33?'var(--yellow)':'var(--red)'}">${s.mtfConfluence!=null?(s.mtfConfluence*100).toFixed(0)+'%':'—'}</td>
         </tr>`;
       }).join('')}</tbody></table>`;
@@ -582,10 +706,10 @@ function renderSignals(signals) {
     if (el) el.innerHTML = html;
   });
 
-  if (signals.length !== _lastSignalCount) {
-    _lastSignalCount = signals.length;
-    if (signals.length > 0)
-      addFeed(`${signals.length} signal(s): ${signals.map(s=>s.instrument+' '+s.direction).join(', ')}`, 'feed-opened');
+  if (total !== _lastSignalCount) {
+    _lastSignalCount = total;
+    if (total > 0)
+      addFeed(`${total} signal(s): ${signals.map(s=>(s.market==='crypto'?'[C]':'')+s.instrument+' '+s.direction).join(', ')}`, 'feed-opened');
   }
 }
 
@@ -654,26 +778,31 @@ function renderPositions(trades) {
   const html = !trades.length
     ? '<div style="padding:24px;text-align:center;color:var(--muted)">No open positions</div>'
     : `<table><thead><tr>
-        <th>Pair</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>P&L</th><th>Opened</th><th></th>
+        <th>Broker</th><th>Pair</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>P&L</th><th>Opened</th><th></th>
       </tr></thead><tbody>
       ${trades.map(t => {
-        const dir = t.units > 0 ? 'LONG' : 'SHORT';
+        const isCrypto = t.market === 'crypto';
+        const dir = t.direction || (t.units > 0 ? 'LONG' : 'SHORT');
         const pnl = t.unrealizedPL || 0;
         const c   = parseComment(t.clientComment);
         const rr  = t.sl && t.tp ? Math.abs((t.tp - t.openPrice) / (t.openPrice - t.sl)).toFixed(2) : '—';
+        const brokerBadge = isCrypto
+          ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">BINANCE</span>'
+          : '<span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">OANDA</span>';
         return `
         <tr style="cursor:pointer" onclick="togglePositionDetail('${t.id}')">
+          <td>${brokerBadge}</td>
           <td><b>${t.instrument}</b></td>
           <td><span class="tag tag-${dir.toLowerCase()}">${dir}</span></td>
-          <td>${t.openPrice?.toFixed(5)||'—'}</td>
-          <td class="red">${t.sl?.toFixed(5)||'—'}</td>
-          <td class="green">${t.tp?.toFixed(5)||'—'}</td>
+          <td>${fmtPrice(t.openPrice, t.market)}</td>
+          <td class="red">${fmtPrice(t.sl, t.market)}</td>
+          <td class="green">${fmtPrice(t.tp, t.market)}</td>
           <td class="${pnl>=0?'green':'red'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
           <td class="muted">${t.openTime?.slice(0,10)||'—'}</td>
           <td class="muted" style="font-size:16px;text-align:center">▸</td>
         </tr>
         <tr id="pos-detail-${t.id}" style="display:none;background:linear-gradient(135deg,#f5f7ff,#ede9fe)">
-          <td colspan="8" style="padding:16px 20px">
+          <td colspan="9" style="padding:16px 20px">
             <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 20px;align-items:start">
               <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Strategy</span>
               <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--primary)">${c.strategy.toUpperCase()}</span>
@@ -684,7 +813,7 @@ function renderPositions(trades) {
               <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">R:R</span>
               <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--green)">${rr}R</span>
 
-              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Reason</span>
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Reason + AI</span>
               <span style="font-size:12px;line-height:1.5;color:var(--text)">${c.reasoning}</span>
             </div>
           </td>
@@ -804,6 +933,85 @@ function renderSMC(signals) {
     const el = document.getElementById(id);
     if (el) el.innerHTML = html;
   });
+}
+
+// ── Render broker status ──────────────────────────────────────────────────────
+function renderBrokerStatus(data) {
+  if (!data) return;
+  const { oanda, binance } = data;
+
+  // OANDA
+  const oDot   = document.getElementById('oanda-dot');
+  const oBadge = document.getElementById('oanda-status-badge');
+  if (oanda.connected) {
+    if (oDot)   { oDot.style.background = 'var(--green)'; }
+    if (oBadge) { oBadge.textContent = 'CONNECTED'; oBadge.style.background = '#d1fae5'; oBadge.style.color = '#065f46'; }
+    const bal = oanda.account?.balance || 0;
+    const unr = oanda.account?.unrealizedPL || 0;
+    const el = document.getElementById('oanda-balance');
+    if (el) el.textContent = '$' + bal.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const uEl = document.getElementById('oanda-unrealized');
+    if (uEl) { uEl.textContent = (unr>=0?'+':'')+unr.toFixed(2); uEl.style.color = unr>=0?'var(--green)':'var(--red)'; }
+    const errEl = document.getElementById('oanda-error');
+    if (errEl) errEl.style.display = 'none';
+  } else {
+    if (oDot)   { oDot.style.background = 'var(--red)'; oDot.style.animation = 'none'; }
+    if (oBadge) { oBadge.textContent = 'DISCONNECTED'; oBadge.style.background = '#fee2e2'; oBadge.style.color = '#991b1b'; }
+    const errEl = document.getElementById('oanda-error');
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = oanda.error || 'Connection failed'; }
+  }
+  const acctEl = document.getElementById('oanda-acct-id'); if (acctEl) acctEl.textContent = oanda.accountId || '—';
+  const envEl  = document.getElementById('oanda-env');     if (envEl)  { envEl.textContent = (oanda.env || '—').toUpperCase(); envEl.style.color = oanda.env === 'live' ? 'var(--red)' : 'var(--blue)'; }
+  const opEl   = document.getElementById('oanda-open');    if (opEl)   opEl.textContent = (oanda.account?.openTrades ?? '—') + ' trades';
+  const pingEl = document.getElementById('oanda-ping');    if (pingEl) pingEl.textContent = oanda.pingMs + 'ms';
+
+  // Binance
+  const bDot   = document.getElementById('binance-dot');
+  const bBadge = document.getElementById('binance-status-badge');
+  if (!binance.configured) {
+    if (bDot)   { bDot.style.background = 'var(--muted)'; bDot.style.animation = 'none'; }
+    if (bBadge) { bBadge.textContent = 'NOT CONFIGURED'; bBadge.style.background = '#f1f5f9'; bBadge.style.color = 'var(--muted)'; }
+    const bErr = document.getElementById('binance-error');
+    if (bErr) { bErr.style.display = 'block'; bErr.textContent = 'Add BINANCE_API_KEY and BINANCE_SECRET_KEY to .env'; }
+  } else if (binance.connected) {
+    if (bDot)   { bDot.style.background = 'var(--green)'; }
+    if (bBadge) { bBadge.textContent = binance.testnet ? 'TESTNET' : 'LIVE'; bBadge.style.background = binance.testnet ? '#fef3c7' : '#d1fae5'; bBadge.style.color = binance.testnet ? '#92400e' : '#065f46'; }
+    const bBal = binance.account?.balance || 0;
+    const bUnr = binance.account?.unrealizedPL || 0;
+    const bEl  = document.getElementById('binance-balance');
+    if (bEl) bEl.textContent = '$' + bBal.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const bUEl = document.getElementById('binance-unrealized');
+    if (bUEl) { bUEl.textContent = (bUnr>=0?'+':'')+bUnr.toFixed(2); bUEl.style.color = bUnr>=0?'var(--green)':'var(--red)'; }
+    const bErr = document.getElementById('binance-error');
+    if (bErr) bErr.style.display = 'none';
+  } else {
+    if (bDot)   { bDot.style.background = 'var(--red)'; bDot.style.animation = 'none'; }
+    if (bBadge) { bBadge.textContent = 'ERROR'; bBadge.style.background = '#fee2e2'; bBadge.style.color = '#991b1b'; }
+    const bErr = document.getElementById('binance-error');
+    if (bErr) { bErr.style.display = 'block'; bErr.textContent = binance.error || 'Connection failed'; }
+  }
+  const bModeEl = document.getElementById('binance-mode');       if (bModeEl) bModeEl.textContent = binance.testnet ? 'Testnet' : 'Live';
+  const bConfEl = document.getElementById('binance-configured'); if (bConfEl) bConfEl.textContent = binance.configured ? 'Yes' : 'No';
+  const bOpenEl = document.getElementById('binance-open');       if (bOpenEl) bOpenEl.textContent = (binance.account?.openTrades ?? '—') + ' positions';
+  const bPingEl = document.getElementById('binance-ping');       if (bPingEl) bPingEl.textContent = binance.pingMs + 'ms';
+
+  // AI status
+  const aiEl = document.getElementById('ai-status-badge');
+  if (aiEl) { aiEl.textContent = 'ACTIVE'; aiEl.style.background = '#d1fae5'; aiEl.style.color = '#065f46'; }
+}
+
+// ── Render crypto regime ──────────────────────────────────────────────────────
+function renderCryptoRegime(regime) {
+  const el = document.getElementById('crypto-regime-wrap2');
+  if (!el || !regime || !Object.keys(regime).length) return;
+  el.innerHTML = Object.entries(regime).map(([sym, r]) => {
+    const bg = r.includes('BULL') ? '#d1fae5' : r.includes('BEAR') ? '#fee2e2' : '#fef3c7';
+    const tc = r.includes('BULL') ? '#065f46' : r.includes('BEAR') ? '#991b1b' : '#92400e';
+    return `<div style="display:flex;flex-direction:column;align-items:center;padding:10px 8px;border-radius:8px;background:${bg};gap:4px">
+      <span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text)">${sym.replace('USDT','')}</span>
+      <span style="font-size:9px;font-weight:700;color:${tc}">${r}</span>
+    </div>`;
+  }).join('');
 }
 
 // ── Equity sparkline ──────────────────────────────────────────────────────────

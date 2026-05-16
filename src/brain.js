@@ -20,7 +20,7 @@ import { getMultiCandles, getAccountSummary, getOpenTrades, getClosedTrades, get
 import { enrich } from "./indicators.js";
 import { classifyRegime, isWeekend, getActiveSession, sessionScore } from "./sessions.js";
 import { runStrategies } from "./strategies/index.js";
-import { evaluateSignal, fetchEconomicCalendar } from "./news.js";
+import { evaluateSignal, analyzeSignalWithClaude, fetchEconomicCalendar } from "./news.js";
 import { canTrade, calcUnits, onTradeOpened, onTradeClosed, initRisk, getRiskState, currentRiskPct } from "./risk.js";
 import { calcStrength, rankCurrencies } from "./strength.js";
 import { placeLimitEntry, placeMarketEntry, setupPartialTP, moveToBreakeven, setTrailingStop, getExecutionType, hasConfirmationCandle } from "./execution.js";
@@ -291,15 +291,38 @@ export async function executeTopSignal() {
   const units     = calcUnits(account.balance, liveEntry, signal.sl, signal.instrument, h1);
   if (units === 0) return { executed: false, reason: 'Position size = 0 (heat cap, drawdown mode, or extreme vol)' };
 
-  // News evaluation
-  let newsResult = { decision: 'APPROVE', sizeMult: 1.0, reasoning: 'News check skipped' };
-  try {
-    newsResult = await evaluateSignal(signal);
-  } catch (e) {
-    process.stdout.write(`[NEWS] Error evaluating signal: ${e.message} — proceeding with APPROVE\n`);
-  }
+  // Run news eval + Claude AI analysis in parallel
+  const [newsRes, aiRes] = await Promise.allSettled([
+    evaluateSignal(signal).catch(e => {
+      process.stdout.write(`[NEWS] Error: ${e.message}\n`);
+      return { decision: 'APPROVE', sizeMult: 1.0, reasoning: 'News check failed' };
+    }),
+    analyzeSignalWithClaude(signal, {
+      regime:        scanState.regime?.[signal.instrument],
+      mtfConfluence: signal.mtfConfluence,
+      strength:      scanState.strength,
+      volRegime:     signal.volRegime,
+      session:       scanState.sessionInfo,
+    }).catch(() => ({ approved: true, confidenceAdj: 0, risk: 'MEDIUM', narrative: '', keyFactor: '' })),
+  ]);
+
+  const newsResult = newsRes.status === 'fulfilled' ? newsRes.value
+    : { decision: 'APPROVE', sizeMult: 1.0, reasoning: 'News eval failed' };
+  const aiAnalysis = aiRes.status === 'fulfilled' ? aiRes.value
+    : { approved: true, confidenceAdj: 0, risk: 'MEDIUM', narrative: '', keyFactor: '' };
+
   if (newsResult.decision === 'SKIP')
     return { executed: false, reason: `News veto: ${newsResult.reasoning}` };
+  if (!aiAnalysis.approved)
+    return { executed: false, reason: `AI veto: ${aiAnalysis.keyFactor || aiAnalysis.narrative || 'Claude rejected this setup'}` };
+
+  // Apply Claude confidence adjustment
+  if (aiAnalysis.confidenceAdj !== 0) {
+    signal.confidence = Math.max(0, Math.min(95, signal.confidence + aiAnalysis.confidenceAdj));
+    process.stdout.write(`[AI] ${signal.instrument} confidence adjusted ${aiAnalysis.confidenceAdj > 0 ? '+' : ''}${aiAnalysis.confidenceAdj} → ${signal.confidence}%\n`);
+  }
+  if (aiAnalysis.narrative)
+    process.stdout.write(`[AI] ${signal.instrument}: ${aiAnalysis.narrative}\n`);
 
   const sizeMult    = newsResult.sizeMult ?? 1.0;
   const finalUnits  = Math.round(units * sizeMult);
@@ -324,9 +347,12 @@ export async function executeTopSignal() {
 
   try {
     if (execType === 'LIMIT' && signal.entryLimit) {
+      // Inject AI narrative into signal reasoning for position detail display
+      if (aiAnalysis.narrative) signal.reasoning = `${signal.reasoning} | AI: ${aiAnalysis.narrative}`;
       orderResult = await placeLimitEntry(signal, finalUnits);
     } else {
-      const comment = `${signal.strategy}|${signal.confidence}%|${signal.reasoning}`.slice(0, 128);
+      const aiNote = aiAnalysis.narrative ? ` | AI: ${aiAnalysis.narrative.slice(0, 45)}` : '';
+      const comment = `${signal.strategy}|${signal.confidence}%|${signal.reasoning}${aiNote}`.slice(0, 128);
       orderResult = await placeOrder(signal.instrument, signal.direction === 'LONG' ? finalUnits : -finalUnits, signal.sl, signal.tp, comment);
     }
   } catch (e) {
@@ -365,6 +391,7 @@ export async function executeTopSignal() {
     mtfConfluence: signal.mtfConfluence,
     volRegime: signal.volRegime,
     news: { decision: newsResult.decision, sizeMult, reasoning: newsResult.reasoning },
+    ai:   { risk: aiAnalysis.risk, narrative: aiAnalysis.narrative, keyFactor: aiAnalysis.keyFactor, confidenceAdj: aiAnalysis.confidenceAdj },
     riskPct: +currentRiskPct().toFixed(4),
     balance: account.balance,
     order: orderResult,

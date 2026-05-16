@@ -9,6 +9,7 @@
  *   - 5x leverage on perpetuals
  */
 import { CRYPTO_INSTRUMENTS, CONFIG, BINANCE_KEY, READ_ONLY, DEMO_ENABLED } from './config.js';
+import { analyzeSignalWithClaude } from './news.js';
 import {
   getMultiCryptoCandles, getCryptoPrices, getCryptoAccount,
   getCryptoPositions, placeCryptoOrder, setLeverage, CRYPTO_QTY_DEC,
@@ -207,7 +208,29 @@ export async function executeCryptoTopSignal() {
   if (!DEMO_ENABLED)
     return { executed: false, reason: 'DEMO_TRADING_ENABLED=false — set to true to enable' };
 
-  const comment = `${signal.strategy}|${signal.confidence}%|${(signal.reasoning||'').slice(0,20)}`;
+  // Claude AI analysis
+  let aiAnalysis = { approved: true, confidenceAdj: 0, risk: 'MEDIUM', narrative: '', keyFactor: '' };
+  try {
+    aiAnalysis = await analyzeSignalWithClaude(signal, {
+      regime:        state.regime?.[signal.instrument],
+      mtfConfluence: signal.mtfConfluence,
+      volRegime:     signal.volRegime,
+      session:       '24/7',
+    });
+  } catch {}
+
+  if (!aiAnalysis.approved)
+    return { executed: false, reason: `AI veto: ${aiAnalysis.keyFactor || aiAnalysis.narrative || 'Claude rejected this setup'}` };
+
+  if (aiAnalysis.confidenceAdj !== 0) {
+    signal.confidence = Math.max(0, Math.min(95, signal.confidence + aiAnalysis.confidenceAdj));
+    process.stdout.write(`[CRYPTO AI] ${signal.instrument} confidence ${aiAnalysis.confidenceAdj > 0 ? '+' : ''}${aiAnalysis.confidenceAdj} → ${signal.confidence}%\n`);
+  }
+  if (aiAnalysis.narrative)
+    process.stdout.write(`[CRYPTO AI] ${signal.instrument}: ${aiAnalysis.narrative}\n`);
+
+  const aiNote = aiAnalysis.narrative ? ` | AI: ${aiAnalysis.narrative.slice(0, 45)}` : '';
+  const comment = `${signal.strategy}|${signal.confidence}%|${(signal.reasoning||'').slice(0,40)}${aiNote}`.slice(0, 128);
 
   try {
     const result = await placeCryptoOrder(
@@ -239,6 +262,7 @@ export async function executeCryptoTopSignal() {
       strategy:   signal.strategy,
       confidence: signal.confidence,
       balance:    account.balance,
+      ai:         { risk: aiAnalysis.risk, narrative: aiAnalysis.narrative, confidenceAdj: aiAnalysis.confidenceAdj },
     };
   } catch(e) {
     return { executed: false, reason: `Order failed: ${e.message}` };

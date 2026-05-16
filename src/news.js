@@ -175,6 +175,88 @@ Respond ONLY with JSON (no extra text):
   }
 }
 
+// ── Full AI signal analysis ───────────────────────────────────────────────────
+/**
+ * Sends full market context to Claude for intelligent trade evaluation.
+ * Returns: { approved, confidenceAdj, risk, narrative, keyFactor }
+ */
+export async function analyzeSignalWithClaude(signal, context = {}) {
+  if (!ANTHROPIC_KEY)
+    return { approved: true, confidenceAdj: 0, risk: 'MEDIUM', narrative: 'No AI key configured', keyFactor: '' };
+
+  const { regime, mtfConfluence, strength, volRegime, session } = context;
+
+  // Only fetch news context for forex pairs (crypto has no FF calendar)
+  const isCrypto = signal.market === 'crypto' || (signal.instrument || '').endsWith('USDT');
+  let calEvents = [], headlines = [];
+  if (!isCrypto) {
+    try { calEvents = await getRelevantEvents(signal.instrument, 180); } catch {}
+    try { headlines = await getRelevantHeadlines(signal.instrument); } catch {}
+  }
+
+  const strLines = strength && Object.keys(strength).length
+    ? Object.entries(strength).map(([c, s]) => `  ${c}: ${s > 0 ? '+' : ''}${s.toFixed(2)}`).join('\n')
+    : '  Not available';
+
+  const prompt = `You are JARVIS, an expert algorithmic trading AI. Analyze this trade signal holistically.
+
+SIGNAL:
+  Instrument: ${signal.instrument}
+  Direction: ${signal.direction}
+  Strategy: ${signal.strategy}
+  Confidence: ${signal.confidence}%
+  Entry: ${signal.entry?.toFixed ? signal.entry.toFixed(5) : signal.entry}
+  R:R: ${signal.rr}
+  Market: ${signal.market || 'forex'}
+
+MARKET CONTEXT:
+  Regime: ${regime || 'UNKNOWN'}
+  MTF Confluence: ${mtfConfluence != null ? (mtfConfluence * 100).toFixed(0) + '%' : 'unknown'}
+  Volatility: ${volRegime || 'NORMAL'}
+  Session: ${Array.isArray(session) ? session.join('+') || 'off-hours' : session || 'off-hours'}
+
+CURRENCY STRENGTH (24h):
+${strLines}
+
+SIGNAL REASONING:
+  ${signal.reasoning || 'No reasoning provided'}
+
+UPCOMING EVENTS (next 3h):
+${calEvents.length ? calEvents.map(e => `  [${e.impact}] ${e.currency} ${e.title} in ${Math.round((e.timestamp - Date.now()) / 60_000)}m`).join('\n') : '  None'}
+
+HEADLINES:
+${headlines.length ? headlines.slice(0, 3).map(h => `  • ${h.title}`).join('\n') : '  None'}
+
+Consider: Is this strategy right for the regime? Does strength align with direction? Any news risk? Is R:R worth it given current conditions?
+
+Respond ONLY with valid JSON (no markdown, no extra text):
+{"approved":true,"confidence_adj":5,"risk":"LOW","narrative":"Brief 1-2 sentence market story.","key_factor":"Most important consideration."}`;
+
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: ANTHROPIC_KEY });
+    const msg = await Promise.race([
+      client.messages.create({
+        model: CONFIG.aiModel, max_tokens: 350,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('AI timeout')), CONFIG.aiTimeout)),
+    ]);
+    let raw = msg.content[0].text.trim();
+    if (raw.startsWith('```')) raw = raw.split('```')[1].replace(/^json/, '');
+    const parsed = JSON.parse(raw);
+    return {
+      approved:      parsed.approved ?? true,
+      confidenceAdj: Math.max(-20, Math.min(20, parseInt(parsed.confidence_adj) || 0)),
+      risk:          ['LOW', 'MEDIUM', 'HIGH'].includes(parsed.risk) ? parsed.risk : 'MEDIUM',
+      narrative:     (parsed.narrative || '').slice(0, 200),
+      keyFactor:     (parsed.key_factor || '').slice(0, 100),
+    };
+  } catch (e) {
+    return { approved: true, confidenceAdj: 0, risk: 'MEDIUM', narrative: '', keyFactor: `AI unavailable: ${e.message}` };
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function evaluateSignal(signal) {

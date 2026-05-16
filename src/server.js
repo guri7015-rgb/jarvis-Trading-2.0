@@ -8,7 +8,7 @@ import http from "http";
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { PORT, INSTRUMENTS, BINANCE_KEY, CONFIG } from "./config.js";
+import { PORT, INSTRUMENTS, BINANCE_KEY, CONFIG, OANDA_ENV, OANDA_ACCT, BINANCE_TESTNET } from "./config.js";
 import { fullScan, executeTopSignal, getScanState } from "./brain.js";
 import { getAccountSummary, getOpenTrades, closeAllPositions, getMultiCandles } from "./oanda.js";
 import { fetchEconomicCalendar, getRelevantEvents, fetchHeadlines } from "./news.js";
@@ -206,6 +206,37 @@ async function router(req, res) {
   if (url.pathname === "/api/crypto/account") {
     try   { json(res, 200, await getCryptoAccount()); }
     catch (e) { json(res, 500, { error: e.message }); }
+    return;
+  }
+
+  // ════ BROKER STATUS ════
+
+  if (url.pathname === "/api/brokers/status") {
+    const t0 = Date.now();
+    const [oandaRes, binanceRes] = await Promise.allSettled([
+      getAccountSummary(),
+      BINANCE_KEY ? getCryptoAccount() : Promise.resolve(null),
+    ]);
+    const oandaOk   = oandaRes.status === 'fulfilled';
+    const binanceOk = binanceRes.status === 'fulfilled' && binanceRes.value !== null;
+    json(res, 200, {
+      oanda: {
+        connected:  oandaOk,
+        account:    oandaOk ? oandaRes.value : null,
+        error:      oandaOk ? null : oandaRes.reason?.message,
+        env:        OANDA_ENV,
+        accountId:  OANDA_ACCT ? OANDA_ACCT.slice(0, 3) + '…' + OANDA_ACCT.slice(-4) : '—',
+        pingMs:     Date.now() - t0,
+      },
+      binance: {
+        connected:  binanceOk,
+        account:    binanceOk ? binanceRes.value : null,
+        error:      binanceRes.status === 'rejected' ? binanceRes.reason?.message : (BINANCE_KEY ? null : 'API key not configured'),
+        testnet:    BINANCE_TESTNET,
+        configured: !!BINANCE_KEY,
+        pingMs:     Date.now() - t0,
+      },
+    });
     return;
   }
 
