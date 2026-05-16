@@ -294,7 +294,7 @@ setInterval(async () => {
 
 setTimeout(() => {
   setInterval(async () => {
-    if (!BINANCE_KEY) return;
+    // crypto paper trading — always run (no API key required)
     try {
       const result = await cryptoFullScan();
       if (result?.signals?.length > 0) {
