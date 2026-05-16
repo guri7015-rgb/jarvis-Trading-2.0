@@ -333,26 +333,70 @@ canvas{display:block;width:100%}
       </div>
     </div>
 
-    <div class="grid2">
-      <div class="card">
-        <div class="card-hdr"><span><span class="pulse"></span>Live Signals</span><span id="signal-count" class="purple">0 found</span></div>
-        <div style="padding:0" id="signals-wrap"><div style="padding:20px;text-align:center;color:var(--muted)">Scanning markets…</div></div>
+    <!-- Session clocks -->
+    <div class="grid4" style="margin-bottom:16px" id="session-clocks">
+      <div class="card" id="sess-tokyo">
+        <div class="card-body" style="padding:12px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--text)">Tokyo</span>
+            <span id="sess-tokyo-badge" class="badge" style="font-size:9px">—</span>
+          </div>
+          <div id="sess-tokyo-time" style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text)">—</div>
+          <div style="font-size:9px;color:var(--muted);margin-top:2px">00:00 – 09:00 UTC</div>
+          <div id="sess-tokyo-cd" style="font-size:10px;color:var(--muted);margin-top:4px">—</div>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-hdr"><span>Currency Strength</span><span class="muted" id="strength-updated">—</span></div>
-        <div class="card-body" id="strength-wrap"><div style="color:var(--muted)">Loading…</div></div>
+      <div class="card" id="sess-sydney">
+        <div class="card-body" style="padding:12px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--text)">Sydney</span>
+            <span id="sess-sydney-badge" class="badge" style="font-size:9px">—</span>
+          </div>
+          <div id="sess-sydney-time" style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text)">—</div>
+          <div style="font-size:9px;color:var(--muted);margin-top:2px">22:00 – 07:00 UTC</div>
+          <div id="sess-sydney-cd" style="font-size:10px;color:var(--muted);margin-top:4px">—</div>
+        </div>
+      </div>
+      <div class="card" id="sess-london">
+        <div class="card-body" style="padding:12px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--text)">London</span>
+            <span id="sess-london-badge" class="badge" style="font-size:9px">—</span>
+          </div>
+          <div id="sess-london-time" style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text)">—</div>
+          <div style="font-size:9px;color:var(--muted);margin-top:2px">07:00 – 16:00 UTC</div>
+          <div id="sess-london-cd" style="font-size:10px;color:var(--muted);margin-top:4px">—</div>
+        </div>
+      </div>
+      <div class="card" id="sess-newyork">
+        <div class="card-body" style="padding:12px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--text)">New York</span>
+            <span id="sess-newyork-badge" class="badge" style="font-size:9px">—</span>
+          </div>
+          <div id="sess-newyork-time" style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text)">—</div>
+          <div style="font-size:9px;color:var(--muted);margin-top:2px">12:00 – 21:00 UTC</div>
+          <div id="sess-newyork-cd" style="font-size:10px;color:var(--muted);margin-top:4px">—</div>
+        </div>
       </div>
     </div>
 
-    <div class="grid2">
+    <!-- Signals + Positions side by side -->
+    <div class="grid2" style="margin-bottom:16px">
+      <div class="card">
+        <div class="card-hdr"><span><span class="pulse"></span>Live Signals</span><span id="signal-count" class="purple">0 found</span></div>
+        <div style="padding:0;max-height:340px;overflow-y:auto" id="signals-wrap"><div style="padding:20px;text-align:center;color:var(--muted)">Scanning markets…</div></div>
+      </div>
       <div class="card">
         <div class="card-hdr">Open Positions <span id="pos-count" style="color:var(--primary)">0</span></div>
-        <div style="padding:0" id="positions-wrap"><div style="padding:16px;text-align:center;color:var(--muted)">No open positions</div></div>
+        <div style="padding:0;max-height:340px;overflow-y:auto" id="positions-wrap"><div style="padding:16px;text-align:center;color:var(--muted)">No open positions</div></div>
       </div>
-      <div class="card">
-        <div class="card-hdr">Equity Curve</div>
-        <div class="card-body"><canvas id="equity-chart" style="height:90px"></canvas></div>
-      </div>
+    </div>
+
+    <!-- Equity curve full width -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-hdr">Equity Curve <span class="muted" style="font-size:10px">NAV · updates every 30s</span></div>
+      <div class="card-body"><canvas id="equity-chart" style="height:100px"></canvas></div>
     </div>
 
     <div class="card">
@@ -1205,9 +1249,10 @@ function renderHeadlinesList() {
     const impactCls = impact === 'HIGH' ? 'news-impact-high' : impact === 'MEDIUM' ? 'news-impact-med' : impact === 'LOW' ? 'news-impact-low' : '';
     const dirCls = a?.direction === 'bullish' ? 'news-dir-bull' : a?.direction === 'bearish' ? 'news-dir-bear' : 'news-dir-neutral';
     const dirSymbol = a?.direction === 'bullish' ? '↑ Bullish' : a?.direction === 'bearish' ? '↓ Bearish' : a?.direction === 'mixed' ? '↕ Mixed' : '';
-    const marketsHtml = a?.markets?.length ? `<div class="news-ai-markets">Affects: ${a.markets.join(' · ')}</div>` : '';
-    const aiHtml = a?.reasoning
-      ? `<div class="news-ai-box">${marketsHtml}${a.reasoning}</div>`
+    const tickersHtml = (a?.tickers || a?.markets || []).length
+      ? `<div class="news-ai-markets">📍 ${(a.tickers || a.markets).join(' · ')}</div>` : '';
+    const aiHtml = (a?.what || a?.effect)
+      ? `<div class="news-ai-box">${tickersHtml}${a.what ? `<b>What:</b> ${a.what}<br>` : ''}${a.effect ? `<b>Effect:</b> ${a.effect}` : (a.reasoning||'')}</div>`
       : '';
     return `<div class="news-item" data-cat="${cat}">
       <div class="news-item-title">${h.title}</div>
@@ -1726,9 +1771,83 @@ refreshBrokers();
 triggerScan();
 safeRefresh();
 setInterval(triggerScan,       60_000);
-setInterval(refreshBrokers,    30_000);   // broker status every 30s
-setInterval(triggerCryptoScan, 90_000);   // crypto scan every 90s (auto-executes in backend)
+setInterval(refreshBrokers,    30_000);
+setInterval(triggerCryptoScan, 90_000);
 window.addEventListener('resize', drawEquity);
+
+// ── Session clocks ────────────────────────────────────────────────────────────
+const SESSIONS = [
+  { id:'tokyo',   label:'Tokyo',    open:0,  close:9,  tz:'Asia/Tokyo'          },
+  { id:'sydney',  label:'Sydney',   open:22, close:7,  tz:'Australia/Sydney'    },
+  { id:'london',  label:'London',   open:7,  close:16, tz:'Europe/London'       },
+  { id:'newyork', label:'New York', open:12, close:21, tz:'America/New_York'    },
+];
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+function fmtCountdown(ms){
+  const tot = Math.max(0, Math.round(ms/1000));
+  const h = Math.floor(tot/3600), m = Math.floor((tot%3600)/60), s = tot%60;
+  return h ? `${h}h ${pad2(m)}m` : `${pad2(m)}m ${pad2(s)}s`;
+}
+
+function tickSessions(){
+  const now = new Date();
+  const utcH = now.getUTCHours(), utcM = now.getUTCMinutes(), utcS = now.getUTCSeconds();
+  const utcMins = utcH*60 + utcM;
+
+  SESSIONS.forEach(s => {
+    const localTime = now.toLocaleTimeString('en-GB',{timeZone:s.tz,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    document.getElementById('sess-'+s.id+'-time').textContent = localTime;
+
+    // Is session open?
+    const isWraparound = s.open > s.close; // sydney wraps midnight
+    const openMins  = s.open  * 60;
+    const closeMins = s.close * 60;
+    let isOpen;
+    if (isWraparound) isOpen = utcMins >= openMins || utcMins < closeMins;
+    else              isOpen = utcMins >= openMins && utcMins < closeMins;
+
+    const badge   = document.getElementById('sess-'+s.id+'-badge');
+    const cdEl    = document.getElementById('sess-'+s.id+'-cd');
+    const cardEl  = document.getElementById('sess-'+s.id);
+
+    if (isOpen) {
+      badge.textContent = 'OPEN';
+      badge.className   = 'badge badge-live';
+      cardEl.style.borderColor = 'var(--green)';
+      // countdown to close
+      let closeTotalMins = closeMins;
+      if (isWraparound && utcMins >= openMins) closeTotalMins += 24*60;
+      const msToClose = (closeTotalMins - utcMins)*60_000 - utcS*1000;
+      cdEl.textContent = 'Closes in ' + fmtCountdown(msToClose);
+    } else {
+      badge.textContent = 'CLOSED';
+      badge.className   = 'badge badge-ro';
+      cardEl.style.borderColor = 'var(--border)';
+      // countdown to open
+      let openTotalMins = openMins;
+      if (utcMins >= openMins && !isWraparound) openTotalMins += 24*60;
+      if (isWraparound && utcMins >= closeMins && utcMins < openMins) openTotalMins = openMins;
+      if (isWraparound && utcMins < closeMins) openTotalMins = openMins; // already past midnight
+      let msToOpen = (openTotalMins - utcMins)*60_000 - utcS*1000;
+      if (msToOpen < 0) msToOpen += 24*3600_000;
+      cdEl.textContent = 'Opens in ' + fmtCountdown(msToOpen);
+    }
+
+    // Highlight overlap (London + NY both open: 12-16 UTC)
+    if (s.id === 'london' || s.id === 'newyork') {
+      const overlap = utcMins >= 12*60 && utcMins < 16*60;
+      if (overlap && isOpen) {
+        badge.textContent = 'OVERLAP';
+        badge.style.background = 'linear-gradient(135deg,#fef3c7,#fde68a)';
+        badge.style.color = '#92400e';
+      }
+    }
+  });
+}
+
+tickSessions();
+setInterval(tickSessions, 1000);
 </script>
 </body>
 </html>

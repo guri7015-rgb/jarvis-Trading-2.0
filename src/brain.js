@@ -213,8 +213,8 @@ export async function fullScan() {
         if (!confirmed) signal.confidence = Math.max(signal.confidence - 8, CONFIG.minConfidence);
       }
 
-      // Session confidence weight
-      signal.confidence = Math.min(95, Math.round(signal.confidence * (0.7 + 0.3 * sessScore)));
+      // Session tag only — no confidence penalty (demo: trade 24/7 on weekdays)
+      signal.session = session.join('+') || 'Off-hours';
 
       // Volatility regime check
       const atrPct = atrPercentile(h1, 100);

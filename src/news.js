@@ -289,24 +289,25 @@ export async function analyzeHeadlinesWithClaude(headlines) {
 
   const items = headlines.slice(0, 15).map((h, i) => `${i+1}. ${h.title}`).join('\n');
 
-  const prompt = `You are a financial market analyst. For each headline below, provide a brief market impact analysis.
+  const prompt = `You are a trading analyst. For each headline, explain it simply so a trader knows exactly what to do.
 
 Headlines:
 ${items}
 
-For EACH headline respond with a JSON array (one object per headline, same order):
+For EACH headline return a JSON array (same order):
 [
   {
     "index": 1,
     "category": "Central Banks|Macro Economy|Crypto|Commodities|Geopolitics|Equities|Technology|General",
-    "markets": ["EUR/USD","USD/JPY","XAU/USD","BTC","Oil", etc — list affected markets],
+    "tickers": ["EUR/USD", "GBP/USD", "BTC", "Gold", "Oil" — specific tickers/pairs affected],
     "direction": "bullish"|"bearish"|"neutral"|"mixed",
     "impact": "HIGH"|"MEDIUM"|"LOW",
-    "reasoning": "1-2 sentences: why this matters and expected market effect"
+    "what": "One sentence: what is this news in plain English",
+    "effect": "One sentence: exact effect on the listed tickers — e.g. USD likely to rise, Gold may drop"
   }
 ]
 
-Respond ONLY with the JSON array. No markdown, no extra text.`;
+Be specific about tickers. No markdown, respond ONLY with the JSON array.`;
 
   try {
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
