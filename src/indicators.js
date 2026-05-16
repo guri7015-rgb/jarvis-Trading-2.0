@@ -156,6 +156,11 @@ export function enrich(candles) {
   const { adx: adxArr, diPlus, diMinus } = adx(candles, 14);
   const volMa  = closes.map((_, i) => i < 19 ? null : candles.slice(i - 19, i + 1).reduce((a, c) => a + c.volume, 0) / 20);
 
+  // ADX/DI arrays are shorter than candles due to Wilder smoothing (2×period offsets).
+  // Right-align them so the last element of each array maps to the last candle.
+  const adxOff = candles.length - adxArr.length;   // typically 27 with period=14
+  const diOff  = candles.length - diPlus.length;   // typically 14 with period=14
+
   return candles.map((c, i) => ({
     ...c,
     ema20:     ema20[i],
@@ -166,9 +171,9 @@ export function enrich(candles) {
     macdSig:   macdS[i],
     macdHist:  macdH[i],
     atr:       atr14[i],
-    adx:       adxArr[i - 1] ?? null,
-    diPlus:    diPlus[i - 1] ?? null,
-    diMinus:   diMinus[i - 1] ?? null,
+    adx:       adxArr[i - adxOff] ?? null,
+    diPlus:    diPlus[i - diOff]  ?? null,
+    diMinus:   diMinus[i - diOff] ?? null,
     volMa:     volMa[i],
   }));
 }
