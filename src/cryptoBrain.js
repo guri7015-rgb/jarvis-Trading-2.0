@@ -8,7 +8,7 @@
  *   - Separate risk state from Forex
  *   - 5x leverage on perpetuals
  */
-import { CRYPTO_INSTRUMENTS, CONFIG, BINANCE_KEY, READ_ONLY, DEMO_ENABLED } from './config.js';
+import { CRYPTO_INSTRUMENTS, CONFIG, READ_ONLY, DEMO_ENABLED } from './config.js';
 import { analyzeSignalWithClaude } from './news.js';
 import {
   getMultiCryptoCandles, getCryptoPrices, getCryptoAccount,
@@ -47,7 +47,6 @@ function resetDaily() {
 // ── Risk ──────────────────────────────────────────────────────────────────────
 function canTrade(symbol) {
   resetDaily();
-  if (!BINANCE_KEY)               return { ok: false, reason: 'No Binance API key set in .env' };
   if (_openCount >= CONFIG.cryptoMaxPositions)
     return { ok: false, reason: `Max crypto positions (${CONFIG.cryptoMaxPositions}) reached` };
   if (_tradesToday >= CONFIG.cryptoMaxDailyTrades)
@@ -86,7 +85,6 @@ function mtfConfluence(d1, h4, h1, direction) {
 // ── Scan ──────────────────────────────────────────────────────────────────────
 export async function cryptoFullScan() {
   if (state.scanning) return { ok: false, message: 'Crypto scan already in progress' };
-  if (!BINANCE_KEY)   return { ok: false, message: 'BINANCE_API_KEY not configured' };
 
   state.scanning = true;
   const errors   = [];
@@ -185,7 +183,6 @@ export async function cryptoFullScan() {
 export async function executeCryptoTopSignal() {
   const signal = state.signals[0];
   if (!signal) return { executed: false, reason: 'No crypto signals — run scan first' };
-  if (!BINANCE_KEY) return { executed: false, reason: 'BINANCE_API_KEY not configured' };
 
   const { ok, reason } = canTrade(signal.instrument);
   if (!ok) return { executed: false, reason };
