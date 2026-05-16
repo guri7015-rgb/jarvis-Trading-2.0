@@ -1043,7 +1043,8 @@ function drawEquity() {
 // ── Main refresh ──────────────────────────────────────────────────────────────
 async function refresh() {
   try {
-    const [stateRes, posRes, calRes, strRes, riskRes, acctRes, hlRes, volRes] = await Promise.allSettled([
+    const [stateRes, posRes, calRes, strRes, riskRes, acctRes, hlRes, volRes,
+           cryptoStateRes, cryptoPosRes] = await Promise.allSettled([
       fetch(`${API}/api/brain/state`).then(r=>r.json()),
       fetch(`${API}/api/brain/positions`).then(r=>r.json()),
       fetch(`${API}/api/news/calendar`).then(r=>r.json()),
@@ -1052,16 +1053,20 @@ async function refresh() {
       fetch(`${API}/api/brain/account`).then(r=>r.json()),
       fetch(`${API}/api/news/headlines`).then(r=>r.json()),
       fetch(`${API}/api/brain/volatility`).then(r=>r.json()),
+      fetch(`${API}/api/crypto/state`).then(r=>r.json()),
+      fetch(`${API}/api/crypto/positions`).then(r=>r.json()),
     ]);
 
-    const state    = stateRes.status==='fulfilled' ? stateRes.value : null;
-    const posData  = posRes.status  ==='fulfilled' ? posRes.value  : null;
-    const calData  = calRes.status  ==='fulfilled' ? calRes.value  : null;
-    const strData  = strRes.status  ==='fulfilled' ? strRes.value  : null;
-    const riskData = riskRes.status ==='fulfilled' ? riskRes.value : null;
-    const acctData = acctRes.status ==='fulfilled' ? acctRes.value : null;
-    const hlData   = hlRes.status   ==='fulfilled' ? hlRes.value   : null;
-    const volData  = volRes.status  ==='fulfilled' ? volRes.value  : null;
+    const state       = stateRes.status==='fulfilled'       ? stateRes.value       : null;
+    const posData     = posRes.status==='fulfilled'         ? posRes.value         : null;
+    const calData     = calRes.status==='fulfilled'         ? calRes.value         : null;
+    const strData     = strRes.status==='fulfilled'         ? strRes.value         : null;
+    const riskData    = riskRes.status==='fulfilled'        ? riskRes.value        : null;
+    const acctData    = acctRes.status==='fulfilled'        ? acctRes.value        : null;
+    const hlData      = hlRes.status==='fulfilled'          ? hlRes.value          : null;
+    const volData     = volRes.status==='fulfilled'         ? volRes.value         : null;
+    const cryptoState = cryptoStateRes.status==='fulfilled' ? cryptoStateRes.value : null;
+    const cryptoPos   = cryptoPosRes.status==='fulfilled'   ? cryptoPosRes.value   : null;
 
     if (state?.config) updateModeBadge(state.config);
 
@@ -1096,7 +1101,7 @@ async function refresh() {
     // ── Gauges ──
     const ddPct = acct&&risk.peakBalance>0 ? Math.max(0,(1-acct.balance/risk.peakBalance)*100) : 0;
     document.getElementById('drawdown').textContent=ddPct.toFixed(2)+'%';
-    document.getElementById('g-dd').style.width=Math.min(ddPct*12.5,100)+'%';  // 8% DD = 100%
+    document.getElementById('g-dd').style.width=Math.min(ddPct*12.5,100)+'%';
     document.getElementById('gv-dd').textContent=ddPct.toFixed(1)+'%';
     const oc = risk.openCount||0;
     document.getElementById('g-open').style.width=(oc/5*100)+'%';
@@ -1118,21 +1123,63 @@ async function refresh() {
       document.getElementById('gv-heat').textContent=hpct.toFixed(1)+'%';
     }
 
-    if (state?.state?.signals) {
-      renderSignals(state.state.signals);
-      renderSMC(state.state.signals);
-      renderRegime(state.state.regime||{});
+    // ── Merge forex + crypto signals ──
+    const forexSignals  = (state?.state?.signals || []).map(s => ({ ...s, market: s.market || 'forex' }));
+    const cryptoSignals = (cryptoState?.signals || []).map(s => ({ ...s, market: 'crypto' }));
+    const allSignals    = [...forexSignals, ...cryptoSignals].sort((a, b) => b.confidence - a.confidence);
+    renderSignals(allSignals);
+    renderSMC(forexSignals);
+
+    if (state?.state?.regime)  renderRegime(state.state.regime);
+    if (cryptoState?.regime)   renderCryptoRegime(cryptoState.regime);
+
+    // ── Merge forex + crypto positions ──
+    const forexTrades  = (posData?.trades || []).map(t => ({ ...t, market: t.market || 'forex' }));
+    const cryptoTrades = (cryptoPos?.trades || []).map(t => ({ ...t, market: 'crypto' }));
+    renderPositions([...forexTrades, ...cryptoTrades]);
+
+    // ── Crypto page state update ──
+    if (cryptoState) renderCryptoState(cryptoState);
+    if (cryptoState?.account) {
+      const cb = cryptoState.account.balance || 0;
+      const cu = cryptoState.account.unrealizedPL || 0;
+      const cbEl = document.getElementById('crypto-balance');
+      if (cbEl) cbEl.textContent = '$' + cb.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const cuEl = document.getElementById('crypto-unrealized');
+      if (cuEl) cuEl.textContent = (cu>=0?'+':'')+cu.toFixed(2)+' unrealized';
+    }
+    if (cryptoPos?.trades) {
+      const ct = cryptoPos.trades;
+      document.getElementById('crypto-open-count').textContent = ct.length;
+      const pw = document.getElementById('crypto-positions-wrap');
+      if (pw) pw.innerHTML = !ct.length
+        ? '<div style="padding:20px;text-align:center;color:var(--muted)">No open positions</div>'
+        : `<table><thead><tr><th>Symbol</th><th>Dir</th><th>Entry</th><th>P&L</th><th>Opened</th></tr></thead><tbody>
+          ${ct.map(t=>{const pnl=t.unrealizedPL||0;return`<tr>
+            <td><b>${t.instrument}</b></td>
+            <td><span class="tag tag-${t.direction.toLowerCase()}">${t.direction}</span></td>
+            <td style="font-family:var(--mono);font-size:11px">${(t.openPrice||0).toFixed(2)}</td>
+            <td class="${pnl>=0?'green':'red'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
+            <td class="muted">${t.openTime?.slice(0,10)||'—'}</td>
+          </tr>`;}).join('')}</tbody></table>`;
     }
 
-    if (posData?.trades) renderPositions(posData.trades);
-    if (calData?.events) renderCalendar(calData.events);
-    if (strData?.strength) renderStrength(strData.strength, strData.ranked);
-    if (hlData?.headlines) renderHeadlines(hlData.headlines);
-    if (volData?.volatility) renderVolRegimes(volData.volatility);
+    if (calData?.events)      renderCalendar(calData.events);
+    if (strData?.strength)    renderStrength(strData.strength, strData.ranked);
+    if (hlData?.headlines)    renderHeadlines(hlData.headlines);
+    if (volData?.volatility)  renderVolRegimes(volData.volatility);
 
   } catch(e) {
     addFeed('Server unreachable — retrying…','feed-warn');
   }
+}
+
+// ── Broker status refresh (every 30s) ─────────────────────────────────────────
+async function refreshBrokers() {
+  try {
+    const data = await fetch(`${API}/api/brokers/status`).then(r=>r.json());
+    renderBrokerStatus(data);
+  } catch {}
 }
 
 // ── Backtest ──────────────────────────────────────────────────────────────────
@@ -1325,12 +1372,12 @@ async function safeRefresh() {
 }
 
 refresh();
-refreshCrypto();
+refreshBrokers();
 triggerScan();
 safeRefresh();
 setInterval(triggerScan,       60_000);
-setInterval(refreshCrypto,     15_000);   // crypto data refreshes every 15s
-setInterval(triggerCryptoScan, 90_000);   // crypto scan every 90s
+setInterval(refreshBrokers,    30_000);   // broker status every 30s
+setInterval(triggerCryptoScan, 90_000);   // crypto scan every 90s (auto-executes in backend)
 window.addEventListener('resize', drawEquity);
 </script>
 </body>

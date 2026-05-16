@@ -176,7 +176,8 @@ export function breakout(instrument, enriched) {
   if (!last?.atr || !prev) return null;
 
   const { close: entry, high, low, atr, adx: adxVal, macdHist } = last;
-  const pip = PIP[instrument] || 0.0001;
+  // For crypto (large prices like 94000), use ATR-based pip; for forex use PIP table
+  const pip = PIP[instrument] || (atr * 0.1) || 0.0001;
 
   // Find recent range (last 20 bars)
   const range   = enriched.slice(-21, -1);
