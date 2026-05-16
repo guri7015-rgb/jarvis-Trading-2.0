@@ -292,7 +292,7 @@ canvas{display:block;width:100%}
   <!-- ══ PAGE: Signals ══ -->
   <div class="page" id="page-signals">
     <div class="section-title">Live Signals</div>
-    <div class="section-sub">Forex (OANDA) + Crypto (Binance) signals unified — AI-analyzed before execution</div>
+    <div class="section-sub">Forex (OANDA) + Crypto (Paper) signals unified — AI-analyzed before execution</div>
     <div class="card">
       <div class="card-hdr"><span><span class="pulse"></span>All Signals</span><span id="signal-count2" class="purple">0 found</span></div>
       <div style="padding:0" id="signals-wrap2"><div style="padding:24px;text-align:center;color:var(--muted)">Scanning…</div></div>
@@ -416,7 +416,7 @@ canvas{display:block;width:100%}
   <!-- ══ PAGE: Positions ══ -->
   <div class="page" id="page-positions">
     <div class="section-title">Open Positions</div>
-    <div class="section-sub">OANDA (Forex) + Binance (Crypto) live trades unified — click any row for AI reasoning</div>
+    <div class="section-sub">OANDA (Forex) + Paper (Crypto) trades unified — click any row for AI reasoning</div>
     <div class="card">
       <div style="padding:0" id="positions-wrap2"><div style="padding:24px;text-align:center;color:var(--muted)">No open positions</div></div>
     </div>
@@ -482,39 +482,39 @@ canvas{display:block;width:100%}
         </div>
       </div>
 
-      <!-- Binance card -->
+      <!-- Crypto Paper card -->
       <div class="card">
         <div class="card-hdr" style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:16px">₿</span> Binance Futures
-          <span id="binance-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-left:auto;animation:pulse 2s infinite"></span>
-          <span id="binance-status-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:#f1f5f9;color:var(--muted)">Checking…</span>
+          <span style="font-size:16px">₿</span> Crypto Paper Trading
+          <span id="crypto-dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-left:auto;animation:pulse 2s infinite"></span>
+          <span id="crypto-status-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:#f1f5f9;color:var(--muted)">Checking…</span>
         </div>
         <div class="card-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
             <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
               <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Balance (USDT)</div>
-              <div id="binance-balance" style="font-family:var(--mono);font-size:18px;font-weight:800;color:#f7931a">—</div>
+              <div id="crypto-paper-balance" style="font-family:var(--mono);font-size:18px;font-weight:800;color:#f7931a">—</div>
             </div>
             <div style="background:var(--bg);border-radius:10px;padding:12px;text-align:center">
-              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Unrealized P&L</div>
-              <div id="binance-unrealized" style="font-family:var(--mono);font-size:18px;font-weight:800">—</div>
+              <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin-bottom:6px">Total P&L</div>
+              <div id="crypto-paper-pnl" style="font-family:var(--mono);font-size:18px;font-weight:800">—</div>
             </div>
           </div>
           <div style="font-size:11px;display:flex;flex-direction:column;gap:6px">
             <div style="display:flex;justify-content:space-between">
-              <span style="color:var(--muted)">Mode</span><span id="binance-mode" style="font-family:var(--mono);font-weight:600">—</span>
+              <span style="color:var(--muted)">Mode</span><span id="crypto-paper-mode" style="font-family:var(--mono);font-weight:600;color:var(--blue)">Paper</span>
             </div>
             <div style="display:flex;justify-content:space-between">
-              <span style="color:var(--muted)">Configured</span><span id="binance-configured" style="font-family:var(--mono);font-weight:600">—</span>
+              <span style="color:var(--muted)">Data Source</span><span id="crypto-paper-source" style="font-family:var(--mono);font-weight:600">Binance Public</span>
             </div>
             <div style="display:flex;justify-content:space-between">
-              <span style="color:var(--muted)">Open Positions</span><span id="binance-open" style="font-family:var(--mono);font-weight:600">—</span>
+              <span style="color:var(--muted)">Open Positions</span><span id="crypto-paper-open" style="font-family:var(--mono);font-weight:600">—</span>
             </div>
             <div style="display:flex;justify-content:space-between">
-              <span style="color:var(--muted)">Ping</span><span id="binance-ping" style="font-family:var(--mono);font-weight:600;color:var(--green)">—</span>
+              <span style="color:var(--muted)">Total Trades</span><span id="crypto-paper-trades" style="font-family:var(--mono);font-weight:600">—</span>
             </div>
           </div>
-          <div id="binance-error" style="display:none;margin-top:10px;padding:8px 12px;background:#fee2e2;border-radius:8px;font-size:11px;color:#991b1b"></div>
+          <div id="crypto-paper-error" style="display:none;margin-top:10px;padding:8px 12px;background:#fee2e2;border-radius:8px;font-size:11px;color:#991b1b"></div>
         </div>
       </div>
     </div>
@@ -547,7 +547,7 @@ canvas{display:block;width:100%}
   <!-- ══ PAGE: Crypto ══ -->
   <div class="page" id="page-crypto">
     <div class="section-title">Crypto Trading</div>
-    <div class="section-sub">Binance Futures — BTC, ETH, SOL, BNB, XRP · auto-scans every 90s</div>
+    <div class="section-sub">Paper Trading · Real Binance Data — BTC, ETH, SOL, BNB, XRP · auto-scans every 90s</div>
 
     <div class="grid4">
       <div class="metric-card" style="background:linear-gradient(135deg,#f7931a,#ffb347)">
@@ -787,7 +787,7 @@ function renderPositions(trades) {
         const c   = parseComment(t.clientComment);
         const rr  = t.sl && t.tp ? Math.abs((t.tp - t.openPrice) / (t.openPrice - t.sl)).toFixed(2) : '—';
         const brokerBadge = isCrypto
-          ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">BINANCE</span>'
+          ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">PAPER</span>'
           : '<span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">OANDA</span>';
         return `
         <tr style="cursor:pointer" onclick="togglePositionDetail('${t.id}')">
@@ -938,7 +938,7 @@ function renderSMC(signals) {
 // ── Render broker status ──────────────────────────────────────────────────────
 function renderBrokerStatus(data) {
   if (!data) return;
-  const { oanda, binance } = data;
+  const { oanda } = data;
 
   // OANDA
   const oDot   = document.getElementById('oanda-dot');
@@ -965,35 +965,32 @@ function renderBrokerStatus(data) {
   const opEl   = document.getElementById('oanda-open');    if (opEl)   opEl.textContent = (oanda.account?.openTrades ?? '—') + ' trades';
   const pingEl = document.getElementById('oanda-ping');    if (pingEl) pingEl.textContent = oanda.pingMs + 'ms';
 
-  // Binance
-  const bDot   = document.getElementById('binance-dot');
-  const bBadge = document.getElementById('binance-status-badge');
-  if (!binance.configured) {
-    if (bDot)   { bDot.style.background = 'var(--muted)'; bDot.style.animation = 'none'; }
-    if (bBadge) { bBadge.textContent = 'NOT CONFIGURED'; bBadge.style.background = '#f1f5f9'; bBadge.style.color = 'var(--muted)'; }
-    const bErr = document.getElementById('binance-error');
-    if (bErr) { bErr.style.display = 'block'; bErr.textContent = 'Add BINANCE_API_KEY and BINANCE_SECRET_KEY to .env'; }
-  } else if (binance.connected) {
+  // Crypto Paper Trading
+  const crypto  = data.crypto || {};
+  const bDot    = document.getElementById('crypto-dot');
+  const bBadge  = document.getElementById('crypto-status-badge');
+  if (crypto.connected) {
     if (bDot)   { bDot.style.background = 'var(--green)'; }
-    if (bBadge) { bBadge.textContent = binance.testnet ? 'TESTNET' : 'LIVE'; bBadge.style.background = binance.testnet ? '#fef3c7' : '#d1fae5'; bBadge.style.color = binance.testnet ? '#92400e' : '#065f46'; }
-    const bBal = binance.account?.balance || 0;
-    const bUnr = binance.account?.unrealizedPL || 0;
-    const bEl  = document.getElementById('binance-balance');
+    if (bBadge) { bBadge.textContent = 'PAPER'; bBadge.style.background = '#fef3c7'; bBadge.style.color = '#92400e'; }
+    const stats  = crypto.stats || {};
+    const bBal   = crypto.account?.balance ?? stats.balance ?? 0;
+    const bPnl   = stats.totalPnL ?? 0;
+    const bEl    = document.getElementById('crypto-paper-balance');
     if (bEl) bEl.textContent = '$' + bBal.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-    const bUEl = document.getElementById('binance-unrealized');
-    if (bUEl) { bUEl.textContent = (bUnr>=0?'+':'')+bUnr.toFixed(2); bUEl.style.color = bUnr>=0?'var(--green)':'var(--red)'; }
-    const bErr = document.getElementById('binance-error');
+    const bPnlEl = document.getElementById('crypto-paper-pnl');
+    if (bPnlEl) { bPnlEl.textContent = (bPnl>=0?'+':'')+bPnl.toFixed(2); bPnlEl.style.color = bPnl>=0?'var(--green)':'var(--red)'; }
+    const bErr   = document.getElementById('crypto-paper-error');
     if (bErr) bErr.style.display = 'none';
+    const bTradeEl = document.getElementById('crypto-paper-trades');
+    if (bTradeEl) bTradeEl.textContent = (stats.trades ?? 0) + ' total';
   } else {
     if (bDot)   { bDot.style.background = 'var(--red)'; bDot.style.animation = 'none'; }
     if (bBadge) { bBadge.textContent = 'ERROR'; bBadge.style.background = '#fee2e2'; bBadge.style.color = '#991b1b'; }
-    const bErr = document.getElementById('binance-error');
-    if (bErr) { bErr.style.display = 'block'; bErr.textContent = binance.error || 'Connection failed'; }
+    const bErr = document.getElementById('crypto-paper-error');
+    if (bErr) { bErr.style.display = 'block'; bErr.textContent = crypto.error || 'Cannot reach Binance public API'; }
   }
-  const bModeEl = document.getElementById('binance-mode');       if (bModeEl) bModeEl.textContent = binance.testnet ? 'Testnet' : 'Live';
-  const bConfEl = document.getElementById('binance-configured'); if (bConfEl) bConfEl.textContent = binance.configured ? 'Yes' : 'No';
-  const bOpenEl = document.getElementById('binance-open');       if (bOpenEl) bOpenEl.textContent = (binance.account?.openTrades ?? '—') + ' positions';
-  const bPingEl = document.getElementById('binance-ping');       if (bPingEl) bPingEl.textContent = binance.pingMs + 'ms';
+  const bOpenEl = document.getElementById('crypto-paper-open');
+  if (bOpenEl) bOpenEl.textContent = ((crypto.stats?.positions ?? crypto.account?.openTrades) ?? '—') + ' open';
 
   // AI status
   const aiEl = document.getElementById('ai-status-badge');

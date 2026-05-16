@@ -8,7 +8,7 @@ import http from "http";
 import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { PORT, INSTRUMENTS, BINANCE_KEY, CONFIG, OANDA_ENV, OANDA_ACCT, BINANCE_TESTNET } from "./config.js";
+import { PORT, INSTRUMENTS, CONFIG, OANDA_ENV, OANDA_ACCT } from "./config.js";
 import { fullScan, executeTopSignal, getScanState } from "./brain.js";
 import { getAccountSummary, getOpenTrades, closeAllPositions, getMultiCandles } from "./oanda.js";
 import { fetchEconomicCalendar, getRelevantEvents, fetchHeadlines } from "./news.js";
@@ -17,7 +17,7 @@ import { calcStrength, rankCurrencies } from "./strength.js";
 import { getHeatState, atrPercentile, getVolRegime } from "./volatility.js";
 import { getRiskState } from "./risk.js";
 import { cryptoFullScan, executeCryptoTopSignal, getCryptoState } from "./cryptoBrain.js";
-import { getCryptoAccount, getCryptoPositions, closeCryptoPosition, CRYPTO_QTY_DEC } from "./binance.js";
+import { getCryptoAccount, getCryptoPositions, closeCryptoPosition, getPaperStats } from "./cryptoPaper.js";
 import { CRYPTO_INSTRUMENTS } from "./config.js";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
@@ -213,12 +213,12 @@ async function router(req, res) {
 
   if (url.pathname === "/api/brokers/status") {
     const t0 = Date.now();
-    const [oandaRes, binanceRes] = await Promise.allSettled([
+    const [oandaRes, paperRes] = await Promise.allSettled([
       getAccountSummary(),
-      BINANCE_KEY ? getCryptoAccount() : Promise.resolve(null),
+      getCryptoAccount(),
     ]);
-    const oandaOk   = oandaRes.status === 'fulfilled';
-    const binanceOk = binanceRes.status === 'fulfilled' && binanceRes.value !== null;
+    const oandaOk = oandaRes.status === 'fulfilled';
+    const paperOk = paperRes.status === 'fulfilled';
     json(res, 200, {
       oanda: {
         connected:  oandaOk,
@@ -228,12 +228,12 @@ async function router(req, res) {
         accountId:  OANDA_ACCT ? OANDA_ACCT.slice(0, 3) + '…' + OANDA_ACCT.slice(-4) : '—',
         pingMs:     Date.now() - t0,
       },
-      binance: {
-        connected:  binanceOk,
-        account:    binanceOk ? binanceRes.value : null,
-        error:      binanceRes.status === 'rejected' ? binanceRes.reason?.message : (BINANCE_KEY ? null : 'API key not configured'),
-        testnet:    BINANCE_TESTNET,
-        configured: !!BINANCE_KEY,
+      crypto: {
+        connected:  paperOk,
+        account:    paperOk ? paperRes.value : null,
+        error:      paperOk ? null : paperRes.reason?.message,
+        mode:       'paper',
+        stats:      getPaperStats(),
         pingMs:     Date.now() - t0,
       },
     });

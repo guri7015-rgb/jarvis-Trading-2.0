@@ -13,7 +13,8 @@ import { analyzeSignalWithClaude } from './news.js';
 import {
   getMultiCryptoCandles, getCryptoPrices, getCryptoAccount,
   getCryptoPositions, placeCryptoOrder, setLeverage, CRYPTO_QTY_DEC,
-} from './binance.js';
+  checkPaperSLTP,
+} from './cryptoPaper.js';
 import { enrich }         from './indicators.js';
 import { runStrategies }  from './strategies/index.js';
 import { classifyRegime } from './sessions.js';
@@ -91,6 +92,9 @@ export async function cryptoFullScan() {
   const errors   = [];
 
   try {
+    // Check if any paper SL/TP levels were hit since last scan
+    await checkPaperSLTP().catch(() => {});
+
     // ── Init ──
     if (!_init) {
       try {

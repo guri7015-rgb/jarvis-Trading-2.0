@@ -25,10 +25,11 @@ export const PORT          = parseInt(process.env.PORT || "8080", 10);
 export const READ_ONLY     = process.env.JARVIS_READ_ONLY   !== "false";
 export const DEMO_ENABLED  = process.env.DEMO_TRADING_ENABLED === "true";
 
-// ── Binance ───────────────────────────────────────────────────────────────────
-export const BINANCE_KEY     = process.env.BINANCE_API_KEY    || "";
-export const BINANCE_SECRET  = process.env.BINANCE_SECRET_KEY || "";
-export const BINANCE_TESTNET = process.env.BINANCE_TESTNET === "true";
+// ── Crypto (paper trading — real Binance public data, simulated execution) ────
+export const BINANCE_KEY     = "";   // not needed — paper trading uses public API
+export const BINANCE_SECRET  = "";
+export const BINANCE_TESTNET = false;
+export const CRYPTO_PAPER    = true; // always paper trading
 
 export const OANDA_HOST = OANDA_ENV === "live"
   ? "api-fxtrade.oanda.com"
