@@ -1116,14 +1116,13 @@ async function refresh() {
     if (acct) {
       const bal = acct.balance||0;
       const unr = acct.unrealizedPL||0;
-      document.getElementById('h-equity').textContent = '$'+bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-      document.getElementById('equity').textContent   = '$'+bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const nav = bal + unr;
+      document.getElementById('h-equity').textContent = '$'+nav.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      document.getElementById('equity').textContent   = '$'+nav.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
       document.getElementById('unrealized').textContent = (unr>=0?'+':'')+unr.toFixed(2)+' unrealized';
-      if (!equityHistory.length || equityHistory[equityHistory.length-1]!==bal) {
-        equityHistory.push(bal);
-        if (equityHistory.length>200) equityHistory.shift();
-        drawEquity();
-      }
+      equityHistory.push(+nav.toFixed(2));
+      if (equityHistory.length>200) equityHistory.shift();
+      drawEquity();
     }
 
     // ── Risk state ──
