@@ -292,10 +292,19 @@ canvas{display:block;width:100%}
   <!-- ══ PAGE: Signals ══ -->
   <div class="page" id="page-signals">
     <div class="section-title">Live Signals</div>
-    <div class="section-sub">Forex (OANDA) + Crypto (Paper) signals unified — AI-analyzed before execution</div>
-    <div class="card">
-      <div class="card-hdr"><span><span class="pulse"></span>All Signals</span><span id="signal-count2" class="purple">0 found</span></div>
-      <div style="padding:0" id="signals-wrap2"><div style="padding:24px;text-align:center;color:var(--muted)">Scanning…</div></div>
+    <div class="section-sub">AI-analyzed before execution · min 60% confidence · Claude approval required</div>
+    <!-- Tab bar -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button id="sig-tab-forex" onclick="sigTab('forex')" style="padding:7px 20px;border-radius:10px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:var(--primary);color:#fff">Forex</button>
+      <button id="sig-tab-crypto" onclick="sigTab('crypto')" style="padding:7px 20px;border-radius:10px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:var(--bg);color:var(--muted)">Crypto</button>
+    </div>
+    <div class="card" id="sig-panel-forex">
+      <div class="card-hdr"><span><span class="pulse"></span>Forex Signals (OANDA)</span><span id="sig-count-forex" class="purple">0 found</span></div>
+      <div style="padding:0" id="sig-wrap-forex"><div style="padding:24px;text-align:center;color:var(--muted)">Scanning…</div></div>
+    </div>
+    <div class="card" id="sig-panel-crypto" style="display:none">
+      <div class="card-hdr"><span><span class="pulse"></span>Crypto Signals (Paper)</span><span id="sig-count-crypto" class="purple">0 found</span></div>
+      <div style="padding:0" id="sig-wrap-crypto"><div style="padding:24px;text-align:center;color:var(--muted)">Scanning…</div></div>
     </div>
   </div>
 
@@ -416,9 +425,19 @@ canvas{display:block;width:100%}
   <!-- ══ PAGE: Positions ══ -->
   <div class="page" id="page-positions">
     <div class="section-title">Open Positions</div>
-    <div class="section-sub">OANDA (Forex) + Paper (Crypto) trades unified — click any row for AI reasoning</div>
-    <div class="card">
-      <div style="padding:0" id="positions-wrap2"><div style="padding:24px;text-align:center;color:var(--muted)">No open positions</div></div>
+    <div class="section-sub">Click any row to see strategy, confidence, and AI reasoning</div>
+    <!-- Tab bar -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button id="pos-tab-forex" onclick="posTab('forex')" style="padding:7px 20px;border-radius:10px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:var(--primary);color:#fff">Forex</button>
+      <button id="pos-tab-crypto" onclick="posTab('crypto')" style="padding:7px 20px;border-radius:10px;border:none;cursor:pointer;font-size:12px;font-weight:700;background:var(--bg);color:var(--muted)">Crypto</button>
+    </div>
+    <div class="card" id="pos-panel-forex">
+      <div class="card-hdr"><span>Forex Positions (OANDA)</span><span id="pos-count-forex" class="blue">0 open</span></div>
+      <div style="padding:0" id="pos-wrap-forex"><div style="padding:24px;text-align:center;color:var(--muted)">No open forex positions</div></div>
+    </div>
+    <div class="card" id="pos-panel-crypto" style="display:none">
+      <div class="card-hdr"><span>Crypto Positions (Paper)</span><span id="pos-count-crypto" class="blue">0 open</span></div>
+      <div style="padding:0" id="pos-wrap-crypto"><div style="padding:24px;text-align:center;color:var(--muted)">No open crypto positions</div></div>
     </div>
   </div>
 
@@ -667,44 +686,66 @@ function fmtPrice(p, market) {
   return market === 'crypto' ? p.toFixed(2) : p.toFixed(5);
 }
 
-// ── Render signals (forex + crypto unified) ───────────────────────────────────
-function renderSignals(signals) {
-  const total = signals.length;
-  ['signal-count','signal-count2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = total + ' found';
+// ── Tab switchers ─────────────────────────────────────────────────────────────
+function sigTab(tab) {
+  ['forex','crypto'].forEach(t => {
+    const active = t === tab;
+    const btn = document.getElementById('sig-tab-'+t);
+    const panel = document.getElementById('sig-panel-'+t);
+    if (btn)   { btn.style.background = active ? 'var(--primary)' : 'var(--bg)'; btn.style.color = active ? '#fff' : 'var(--muted)'; }
+    if (panel) panel.style.display = active ? 'block' : 'none';
   });
+}
+function posTab(tab) {
+  ['forex','crypto'].forEach(t => {
+    const active = t === tab;
+    const btn = document.getElementById('pos-tab-'+t);
+    const panel = document.getElementById('pos-panel-'+t);
+    if (btn)   { btn.style.background = active ? 'var(--primary)' : 'var(--bg)'; btn.style.color = active ? '#fff' : 'var(--muted)'; }
+    if (panel) panel.style.display = active ? 'block' : 'none';
+  });
+}
+
+// ── Signal table builder ──────────────────────────────────────────────────────
+function buildSignalTable(signals) {
+  if (!signals.length)
+    return '<div style="padding:24px;text-align:center;color:var(--muted)">No signals — markets scanning…</div>';
+  return `<table><thead><tr>
+    <th>Pair</th><th>Dir</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Strategy</th><th>MTF</th>
+  </tr></thead><tbody>${signals.map(s => {
+    const isSmc = s.strategy==='smc' || s.strategy==='smc_bos';
+    const cc = s.confidence>=80?'var(--green)':s.confidence>=70?'var(--blue)':'var(--yellow)';
+    return `<tr>
+      <td><b>${s.instrument}</b></td>
+      <td><span class="tag tag-${s.direction.toLowerCase()}">${s.direction}</span></td>
+      <td><span style="font-weight:700;color:${cc}">${s.confidence}%</span></td>
+      <td style="color:var(--primary)">${fmtPrice(s.entryLimit||s.entry,s.market)} <span style="font-size:9px;color:var(--muted)">${isSmc?'LMT':'MKT'}</span></td>
+      <td class="red">${fmtPrice(s.sl,s.market)}</td>
+      <td class="green">${fmtPrice(s.tp,s.market)}</td>
+      <td class="blue">${s.rr||'—'}</td>
+      <td><span class="tag tag-bull" style="font-size:9px">${s.strategy}</span></td>
+      <td style="font-size:10px;color:${s.mtfConfluence>=.66?'var(--green)':s.mtfConfluence>=.33?'var(--yellow)':'var(--red)'}">${s.mtfConfluence!=null?(s.mtfConfluence*100).toFixed(0)+'%':'—'}</td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+// ── Render signals — split by market ─────────────────────────────────────────
+function renderSignals(signals) {
+  const forex  = signals.filter(s => s.market !== 'crypto');
+  const crypto = signals.filter(s => s.market === 'crypto');
+  const total  = signals.length;
+
+  ['signal-count','signal-count2'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=total+' found'; });
   document.getElementById('h-signals').textContent = total;
 
-  const html = !total
-    ? '<div style="padding:24px;text-align:center;color:var(--muted)">No signals — markets scanning…</div>'
-    : `<table><thead><tr>
-        <th>Market</th><th>Pair</th><th>Dir</th><th>Conf</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Strategy</th><th>MTF</th>
-      </tr></thead><tbody>${signals.map(s => {
-        const isCrypto = s.market === 'crypto';
-        const isSmc    = s.strategy === 'smc';
-        const cc = s.confidence>=80?'var(--green)':s.confidence>=70?'var(--blue)':'var(--yellow)';
-        const mktBadge = isCrypto
-          ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">CRYPTO</span>'
-          : '<span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">FOREX</span>';
-        return `<tr>
-          <td>${mktBadge}</td>
-          <td><b>${s.instrument}</b></td>
-          <td><span class="tag tag-${s.direction.toLowerCase()}">${s.direction}</span></td>
-          <td><span style="font-weight:700;color:${cc}">${s.confidence}%</span></td>
-          <td style="color:var(--primary)">${fmtPrice(s.entryLimit||s.entry, s.market)} <span style="font-size:9px;color:var(--muted)">${isSmc?'LMT':'MKT'}</span></td>
-          <td class="red">${fmtPrice(s.sl, s.market)}</td>
-          <td class="green">${fmtPrice(s.tp, s.market)}</td>
-          <td class="blue">${s.rr||'—'}</td>
-          <td><span class="tag ${isSmc?'tag-smc':'tag-bull'}" style="font-size:9px">${s.strategy}</span></td>
-          <td style="font-size:10px;color:${s.mtfConfluence>=.66?'var(--green)':s.mtfConfluence>=.33?'var(--yellow)':'var(--red)'}">${s.mtfConfluence!=null?(s.mtfConfluence*100).toFixed(0)+'%':'—'}</td>
-        </tr>`;
-      }).join('')}</tbody></table>`;
+  const fEl = document.getElementById('sig-wrap-forex');   if (fEl) fEl.innerHTML  = buildSignalTable(forex);
+  const cEl = document.getElementById('sig-wrap-crypto');  if (cEl) cEl.innerHTML  = buildSignalTable(crypto);
+  const fcEl= document.getElementById('sig-count-forex');  if (fcEl) fcEl.textContent = forex.length+' found';
+  const ccEl= document.getElementById('sig-count-crypto'); if (ccEl) ccEl.textContent = crypto.length+' found';
 
-  ['signals-wrap','signals-wrap2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = html;
-  });
+  // Also keep dashboard overview wrap in sync
+  const dash = document.getElementById('signals-wrap');
+  if (dash) dash.innerHTML = buildSignalTable(signals.slice(0,5));
 
   if (total !== _lastSignalCount) {
     _lastSignalCount = total;
@@ -771,59 +812,62 @@ function togglePositionDetail(id) {
   el.style.display = visible ? 'none' : 'table-row';
 }
 
+// ── Position table builder ────────────────────────────────────────────────────
+function buildPositionTable(trades) {
+  if (!trades.length)
+    return '<div style="padding:24px;text-align:center;color:var(--muted)">No open positions</div>';
+  return `<table><thead><tr>
+    <th>Pair</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>P&L</th><th>R:R</th><th>Strategy</th><th>Opened</th><th></th>
+  </tr></thead><tbody>${trades.map(t => {
+    const dir = t.direction || (t.units > 0 ? 'LONG' : 'SHORT');
+    const pnl = t.unrealizedPL || 0;
+    const c   = parseComment(t.clientComment);
+    const rr  = t.sl && t.tp ? Math.abs((t.tp - t.openPrice)/(t.openPrice - t.sl)).toFixed(2) : '—';
+    return `
+    <tr style="cursor:pointer" onclick="togglePositionDetail('${t.id}')">
+      <td><b>${t.instrument}</b></td>
+      <td><span class="tag tag-${dir.toLowerCase()}">${dir}</span></td>
+      <td>${fmtPrice(t.openPrice,t.market)}</td>
+      <td class="red">${fmtPrice(t.sl,t.market)}</td>
+      <td class="green">${fmtPrice(t.tp,t.market)}</td>
+      <td class="${pnl>=0?'green':'red'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
+      <td class="blue">${rr}</td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--primary)">${c.strategy||'—'}</td>
+      <td class="muted">${t.openTime?.slice(0,10)||'—'}</td>
+      <td class="muted" style="font-size:16px;text-align:center">▸</td>
+    </tr>
+    <tr id="pos-detail-${t.id}" style="display:none;background:linear-gradient(135deg,#f5f7ff,#ede9fe)">
+      <td colspan="10" style="padding:16px 20px">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 20px;align-items:start">
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Strategy</span>
+          <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--primary)">${c.strategy.toUpperCase()}</span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Confidence</span>
+          <span style="font-family:var(--mono);font-size:12px;font-weight:600">${c.confidence}</span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">R:R</span>
+          <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--green)">${rr}R</span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Reason + AI</span>
+          <span style="font-size:12px;line-height:1.5;color:var(--text)">${c.reasoning}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
+}
+
 function renderPositions(trades) {
   document.getElementById('pos-count').textContent = trades.length;
   document.getElementById('h-open').textContent = trades.length;
 
-  const html = !trades.length
-    ? '<div style="padding:24px;text-align:center;color:var(--muted)">No open positions</div>'
-    : `<table><thead><tr>
-        <th>Broker</th><th>Pair</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>P&L</th><th>Opened</th><th></th>
-      </tr></thead><tbody>
-      ${trades.map(t => {
-        const isCrypto = t.market === 'crypto';
-        const dir = t.direction || (t.units > 0 ? 'LONG' : 'SHORT');
-        const pnl = t.unrealizedPL || 0;
-        const c   = parseComment(t.clientComment);
-        const rr  = t.sl && t.tp ? Math.abs((t.tp - t.openPrice) / (t.openPrice - t.sl)).toFixed(2) : '—';
-        const brokerBadge = isCrypto
-          ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">PAPER</span>'
-          : '<span style="background:#dbeafe;color:#1e40af;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">OANDA</span>';
-        return `
-        <tr style="cursor:pointer" onclick="togglePositionDetail('${t.id}')">
-          <td>${brokerBadge}</td>
-          <td><b>${t.instrument}</b></td>
-          <td><span class="tag tag-${dir.toLowerCase()}">${dir}</span></td>
-          <td>${fmtPrice(t.openPrice, t.market)}</td>
-          <td class="red">${fmtPrice(t.sl, t.market)}</td>
-          <td class="green">${fmtPrice(t.tp, t.market)}</td>
-          <td class="${pnl>=0?'green':'red'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</td>
-          <td class="muted">${t.openTime?.slice(0,10)||'—'}</td>
-          <td class="muted" style="font-size:16px;text-align:center">▸</td>
-        </tr>
-        <tr id="pos-detail-${t.id}" style="display:none;background:linear-gradient(135deg,#f5f7ff,#ede9fe)">
-          <td colspan="9" style="padding:16px 20px">
-            <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 20px;align-items:start">
-              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Strategy</span>
-              <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--primary)">${c.strategy.toUpperCase()}</span>
+  const forex  = trades.filter(t => t.market !== 'crypto');
+  const crypto = trades.filter(t => t.market === 'crypto');
 
-              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Confidence</span>
-              <span style="font-family:var(--mono);font-size:12px;font-weight:600">${c.confidence}</span>
+  const fEl = document.getElementById('pos-wrap-forex');   if (fEl) fEl.innerHTML = buildPositionTable(forex);
+  const cEl = document.getElementById('pos-wrap-crypto');  if (cEl) cEl.innerHTML = buildPositionTable(crypto);
+  const fcEl= document.getElementById('pos-count-forex');  if (fcEl) fcEl.textContent = forex.length+' open';
+  const ccEl= document.getElementById('pos-count-crypto'); if (ccEl) ccEl.textContent = crypto.length+' open';
 
-              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">R:R</span>
-              <span style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--green)">${rr}R</span>
-
-              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Reason + AI</span>
-              <span style="font-size:12px;line-height:1.5;color:var(--text)">${c.reasoning}</span>
-            </div>
-          </td>
-        </tr>`;
-      }).join('')}</tbody></table>`;
-
-  ['positions-wrap','positions-wrap2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = html;
-  });
+  // Dashboard overview
+  const dash = document.getElementById('positions-wrap');
+  if (dash) dash.innerHTML = buildPositionTable(trades.slice(0,5));
 }
 
 // ── Render regime ─────────────────────────────────────────────────────────────

@@ -94,24 +94,20 @@ export const CONFIG = {
   // RSI divergence settings
   rsiDivLookback: 5,        // bars to look back for divergence
 
-  // Risk management
-  riskPerTrade:         0.01,    // 1% base risk
-  winStreakRisk:         0.015,   // 1.5% after 3 wins
-  lossStreakRisk:        0.005,   // 0.5% after 2 losses
-  winStreakThreshold:    3,
-  lossStreakThreshold:   2,
-  maxOpenPositions:      5,
-  maxDailyTrades:        10,
-  dailyLossLimit:        100,     // USD
-  dailyProfitTarget:     200,     // USD — lock gains
-  maxConsecutiveLosses:  3,
-  drawdownModes: [
-    { pct: 0.03, sizeMult: 0.75, label: "Caution" },
-    { pct: 0.05, sizeMult: 0.50, label: "Defensive" },
-    { pct: 0.08, sizeMult: 0.00, label: "Halted" },
-  ],
-  maxUnitsPerOrder:     2000,
-  maxSpreadMultiple:    2.5,      // skip if spread > 2.5× normal
+  // Risk management — demo mode: max trades, no daily limits
+  riskPerTrade:         0.02,    // 2% risk per trade (aggressive demo)
+  winStreakRisk:         0.02,
+  lossStreakRisk:        0.02,
+  winStreakThreshold:    999,
+  lossStreakThreshold:   999,
+  maxOpenPositions:      50,
+  maxDailyTrades:        999,
+  dailyLossLimit:        999999,
+  dailyProfitTarget:     999999,
+  maxConsecutiveLosses:  999,
+  drawdownModes: [],              // no drawdown halting in demo
+  maxUnitsPerOrder:     10000,
+  maxSpreadMultiple:    5.0,
 
   // News filter
   newsHaltMinutesBefore: 30,
@@ -134,8 +130,8 @@ export const CONFIG = {
   mtfMinConfluence: 0.34,        // at least 1/3 timeframes must agree (2/3 for full boost)
 
   // ── Crypto-specific ────────────────────────────────────────────────────────
-  cryptoRiskPerTrade:   0.01,    // 1% risk per crypto trade
-  cryptoMaxPositions:   3,       // max simultaneous crypto positions
-  cryptoMaxDailyTrades: 6,       // max crypto trades per day
-  cryptoLeverage:       5,       // 5× leverage on Binance Futures
+  cryptoRiskPerTrade:   0.02,    // 2% risk per crypto trade (demo)
+  cryptoMaxPositions:   50,
+  cryptoMaxDailyTrades: 999,
+  cryptoLeverage:       5,
 };

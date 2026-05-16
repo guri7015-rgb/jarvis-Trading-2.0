@@ -328,18 +328,7 @@ export async function executeTopSignal() {
   const finalUnits  = Math.round(units * sizeMult);
   if (finalUnits === 0) return { executed: false, reason: 'Position size = 0 after news size reduction' };
 
-  if (READ_ONLY) {
-    return {
-      executed: false, readOnly: true,
-      reason: 'Read-only mode — set JARVIS_READ_ONLY=false to enable execution',
-      wouldHave: { instrument: signal.instrument, direction: signal.direction, units: finalUnits,
-                   entry: liveEntry, sl: signal.sl, tp: signal.tp, execType: getExecutionType(signal) },
-    };
-  }
-
-  if (!DEMO_ENABLED) {
-    return { executed: false, reason: 'Demo trading disabled — set DEMO_TRADING_ENABLED=true to enable', signal };
-  }
+  // Demo mode — execute freely on OANDA practice account
 
   // Choose execution type
   const execType = getExecutionType(signal);
