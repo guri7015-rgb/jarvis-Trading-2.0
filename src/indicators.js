@@ -58,10 +58,9 @@ export function adx(candles, period = 14) {
     trArr.push(Math.max(curr.high - curr.low, Math.abs(curr.high - prev.close), Math.abs(curr.low - prev.close)));
   }
 
-  // avgSeed: ATR/DI use raw-sum seed (cancels in ratio); ADX uses average seed (DX values are already 0-100)
-  function wilder(arr, p, avgSeed = false) {
-    const seed = arr.slice(0, p).reduce((a, b) => a + b, 0);
-    const out = [avgSeed ? seed / p : seed];
+  // ATR/DM: Wilder sum — adds full raw value each step (cancels in DI ratio)
+  function wilder(arr, p) {
+    const out = [arr.slice(0, p).reduce((a, b) => a + b, 0)];
     for (let i = p; i < arr.length; i++) out.push(out[out.length - 1] - out[out.length - 1] / p + arr[i]);
     return out;
   }
@@ -71,7 +70,12 @@ export function adx(candles, period = 14) {
   const diM   = wilder(dmMinus, period).map((v, i) => atrW[i] ? 100 * v / atrW[i] : 0);
   const dx    = diP.map((p, i) => diP[i] + diM[i] ? 100 * Math.abs(p - diM[i]) / (p + diM[i]) : 0);
 
-  const adxArr = wilder(dx, period, true);  // average seed — keeps ADX in 0-100 range
+  // ADX: standard Wilder average — seed = avg(first N dx), updates add dx/p not full dx
+  // Pre-divide dx by period so the raw-sum wilder formula produces the correct result:
+  //   seed = sum(dx[0..p-1]/p) = avg(dx[0..p-1])  ← correct ADX seed (0-100)
+  //   step = prev*(p-1)/p + dx/p                   ← correct ADX update
+  const dxScaled = dx.map(v => v / period);
+  const adxArr   = wilder(dxScaled, period);
   return { adx: adxArr, diPlus: diP, diMinus: diM };
 }
 
