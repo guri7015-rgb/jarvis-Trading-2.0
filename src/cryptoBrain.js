@@ -15,9 +15,10 @@ import {
   getCryptoPositions, placeCryptoOrder, setLeverage, CRYPTO_QTY_DEC,
   checkPaperSLTP,
 } from './cryptoPaper.js';
-import { enrich }         from './indicators.js';
-import { runStrategies }  from './strategies/index.js';
-import { classifyRegime } from './sessions.js';
+import { enrich }                              from './indicators.js';
+import { trendFollow, meanReversion, breakout } from './strategies/index.js';
+import { smcSignal }                            from './strategies/smc.js';
+import { classifyRegime }                       from './sessions.js';
 import { atrPercentile, getVolRegime } from './volatility.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -131,8 +132,14 @@ export async function cryptoFullScan() {
       const regime = classifyRegime(eH4 || eH1);
       regimes[symbol] = regime;
 
-      // Crypto is 24/7 — no session weighting
-      const signal = runStrategies(symbol, eH1, h1Map, regime);
+      // Crypto is 24/7 — run strategies directly (no forex regime/strength filter)
+      const candidates = [];
+      const _tf = trendFollow(symbol, eH1);               if (_tf)  candidates.push(_tf);
+      const _mr = meanReversion(symbol, eH1);             if (_mr)  candidates.push(_mr);
+      const _bo = breakout(symbol, eH1);                  if (_bo)  candidates.push(_bo);
+      const _atr = eH1[eH1.length - 1]?.atr || 0.001;
+      const _smc = smcSignal(symbol, eH1, _atr);          if (_smc) candidates.push(_smc);
+      const signal = candidates.sort((a, b) => b.confidence - a.confidence)[0] || null;
       if (!signal) continue;
       if (signal.confidence < CONFIG.minConfidence) continue;
 
