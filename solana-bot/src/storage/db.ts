@@ -115,6 +115,17 @@ const MIGRATIONS: string[] = [
   `,
   // 2: why a token's confirmation failed or conflicted (e.g. provider sent the quote mint as the mint).
   `ALTER TABLE tokens ADD COLUMN confirm_note TEXT;`,
+  // 3: apply the conflict rule to rows confirmed before it existed.
+  `
+  UPDATE tokens SET confirm_status = 'CONFLICT',
+    confirm_note = CASE WHEN curve_key_matches = 0 THEN 'provider curve address does not derive from this mint'
+                        ELSE 'no pump.fun bonding curve at the address derived from this mint' END,
+    created_at = CASE WHEN created_at_source LIKE '%:create_received' THEN NULL ELSE created_at END,
+    created_at_evidence = CASE WHEN created_at_source LIKE '%:create_received' THEN NULL ELSE created_at_evidence END,
+    created_at_source = CASE WHEN created_at_source LIKE '%:create_received' THEN NULL ELSE created_at_source END
+  WHERE confirm_status = 'CONFIRMED'
+    AND (curve_key_matches = 0 OR (launch_venue = 'pump_curve' AND curve_virtual_quote IS NULL));
+  `,
 ];
 
 export function openDb(path: string): DatabaseSync {
