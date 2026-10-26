@@ -10,7 +10,7 @@ It is separate from the forex/crypto app in the parent folder and shares no code
 |---|---|
 | 1. Architecture | Done: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | 2. Discovery, normalization, freshness, provider health | Done: [docs/PHASE2-REPORT.md](docs/PHASE2-REPORT.md) |
-| 3. Safety gate, liquidity, quotes, cost measurement | Not started |
+| 3. Safety gate, liquidity, quotes, cost measurement | Done: [docs/PHASE3-REPORT.md](docs/PHASE3-REPORT.md). Holder checks need your Helius key. |
 | 4–9 | Not started. Live trading needs your explicit written approval. |
 
 ## Quick start
@@ -23,6 +23,8 @@ npm test
 npm run probe
 npm run discover -- --minutes 30
 npm run coverage
+npm run discover -- --assess --minutes 30   # also price CAD 30 round trips (quotes only)
+npm run costs
 ```
 
 ## Layout
@@ -31,7 +33,10 @@ npm run coverage
 src/core/        types (with evidence labels), config, clock, redacting logger
 src/net/         HTTP client (rate limits, 429 handling, retries, size caps), reconnecting WebSocket
 src/health/      provider health + fail-closed discovery gate
-src/solana/      read-only RPC with daily budget, mint and pump.fun curve decoders
+src/solana/      read-only RPC with daily budget, mint, token-account and pump.fun curve decoders
+src/market/      Jupiter quotes (read-only), SOL/CAD from Jupiter + Bank of Canada
+src/risk/        tradability gate, policy (placeholder thresholds), costs, holders, curve fee check
+src/assess/      assessor: picks candidates and runs the gate
 src/providers/   PumpPortal (read-only feeds), GeckoTerminal, Jupiter Tokens, DexScreener
 src/discovery/   token registry (dedupe, merge, ordering), on-chain confirmer
 src/storage/     SQLite schema, sessions and gaps
