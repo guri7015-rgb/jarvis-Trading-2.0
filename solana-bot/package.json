@@ -17,7 +17,8 @@
     "signals": "tsx src/cli/signals.ts",
     "replay": "tsx src/cli/replay.ts",
     "backtest": "tsx src/cli/backtest.ts",
-    "export": "tsx src/cli/export.ts"
+    "export": "tsx src/cli/export.ts",
+    "calibrate": "tsx src/cli/calibrate.ts"
   },
   "dependencies": {
     "@solana/kit": "8.4.0",
