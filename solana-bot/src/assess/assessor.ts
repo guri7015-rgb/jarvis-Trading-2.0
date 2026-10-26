@@ -64,12 +64,22 @@ const HOLDER_BREAKER_MS = 30 * 60_000;
 const LAUNCH_VENUES = new Set(["pump_curve", "raydium_launchlab", "meteora_dbc"]);
 const MAX_CANDIDATES = 200;
 
+const BANDS = 4;
+/** 0: <$10k, 1: $10k–50k, 2: $50k–250k, 3: >$250k (provider-reported liquidity). */
+export function liquidityBand(usd: number | undefined): number {
+  if (usd === undefined || usd < 10_000) return 0;
+  if (usd < 50_000) return 1;
+  if (usd < 250_000) return 2;
+  return 3;
+}
+
 const asError = (e: unknown) => (e instanceof Error ? e : new Error(String(e)));
 
 export class Assessor {
   private candidates = new Map<string, Candidate>();
   private priority = new Map<string, { value: number; at: number }>();
   private holderBreakerUntil = 0;
+  private bandTurn = 0;
   public stats = { assessed: 0, passed: 0, rejected: 0, skippedBudget: 0, skippedNotReady: 0 };
 
   constructor(private readonly d: AssessorDeps) {}
@@ -89,10 +99,20 @@ export class Assessor {
     return this.candidates.size;
   }
 
-  /** Next candidate that is confirmed on-chain and out of its recheck cool-down. */
+  /**
+   * Next candidate that is confirmed on-chain and out of its recheck cool-down.
+   * Rotates through liquidity bands so small new tokens get sampled, not only
+   * the deepest pools (which would make costs look better than they are).
+   */
   private pick(): Candidate | undefined {
     const now = this.d.clock.now();
-    const ordered = [...this.candidates.values()].sort((a, b) => (b.liquidityUsd ?? 0) - (a.liquidityUsd ?? 0));
+    const band = (c: Candidate) => liquidityBand(c.liquidityUsd);
+    const start = this.bandTurn++ % BANDS;
+    const ordered = [...this.candidates.values()].sort((a, b) => {
+      const ra = (band(a) - start + BANDS) % BANDS;
+      const rb = (band(b) - start + BANDS) % BANDS;
+      return ra - rb || b.addedAt - a.addedAt;
+    });
     for (const c of ordered) {
       const t = this.d.registry.get(c.mint);
       if (!t || t.confirm_status === "PENDING") continue; // not ready yet
@@ -161,8 +181,9 @@ export class Assessor {
     let mint: DecodedMint | Error = new Error("not read");
     let curve: DecodedBondingCurve | null | undefined;
     let accountsSlot: number | undefined;
+    let curveAddr: string | undefined;
     try {
-      const curveAddr = token?.launch_venue === "pump_curve" ? await derivePumpBondingCurve(c.mint) : undefined;
+      curveAddr = token?.launch_venue === "pump_curve" ? await derivePumpBondingCurve(c.mint) : undefined;
       const res = await this.d.rpc.getMultipleAccounts(curveAddr ? [c.mint, curveAddr] : [c.mint]);
       accountsSlot = res.slot;
       const m = res.accounts[0];
@@ -189,7 +210,13 @@ export class Assessor {
       }
     }
 
-    // 4. Quotes. No quotes without a size.
+    // 4. Priority fee for the pools a swap would lock: the curve for pump.fun tokens,
+    //    otherwise the newest pool we know of. Fetched before the quotes so the
+    //    quotes are the last input and as fresh as possible at decision time.
+    const pool = (this.d.db.prepare("SELECT pool FROM pools WHERE mint = ? ORDER BY first_seen_at DESC LIMIT 1").get(c.mint) as { pool: string } | undefined)?.pool;
+    const prio = await this.priorityFee([curve ? curveAddr : undefined, pool].filter((x): x is string => !!x));
+
+    // 5. Quotes. No quotes without a size.
     let buy: Quote | Error = new Error(fxError ? "no size (FX unavailable)" : "not requested");
     let sell: Quote | Error | undefined;
     if (size !== undefined) {
@@ -206,9 +233,6 @@ export class Assessor {
         }
       }
     }
-
-    // 5. Priority fee for the pools the buy would touch.
-    const prio = await this.priorityFee(buy instanceof Error ? [] : buy.ammKeys);
 
     // 6. Costs and verdict.
     let costs: CostBreakdown | undefined;

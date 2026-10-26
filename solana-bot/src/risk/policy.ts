@@ -57,7 +57,10 @@ export const DEFAULT_POLICY: RiskPolicy = {
   maxRoundTripCostBps: 600,
   maxRouteHops: 2,
   // Labels observed on live Jupiter quotes are added here only after they are seen and checked.
-  allowedRouteLabels: ["Pump.fun", "Pump.fun Amm", "Raydium Launchlab", "Meteora DBC", "Meteora DAMM v2", "Raydium CPMM", "Raydium", "Meteora DLMM", "Raydium CLMM"],
+  // "Whirlpool" (Orca) added after it showed up on live routes for graduated tokens.
+  // Seen but NOT allowed yet (unverified venues): GoonFi V2, TesseraV, Kipseli, BisonFi,
+  // Manifest, Byreal, Obsidian, Deriverse, PancakeSwap.
+  allowedRouteLabels: ["Pump.fun", "Pump.fun Amm", "Raydium Launchlab", "Meteora DBC", "Meteora DAMM v2", "Raydium CPMM", "Raydium", "Meteora DLMM", "Raydium CLMM", "Whirlpool"],
   maxTop10WalletPct: 35,
   maxLargestWalletPct: 10,
   maxCreatorPct: 10,
