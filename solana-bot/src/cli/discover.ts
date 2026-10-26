@@ -4,7 +4,8 @@
  *   npm run discover                 # until Ctrl+C
  *   npm run discover -- --minutes 30 # stop after 30 minutes
  *   npm run discover -- --assess     # also assess candidates (Phase 3, quotes only)
- *   npm run discover -- --assess --signals --paper
+ *   npm run discover -- --assess --signals --paper --dashboard
+ *        # --dashboard serves http://127.0.0.1:4777 (local only). Add --port N to change it.
  *        # Phase 5: approved signals open PAPER positions (real quotes, simulated fills). No wallet, no transactions.
  *   npm run discover -- --assess --signals [--research]
  *        # Phase 4: watch up to 3 tokens' live trades and record strategy/risk decisions (paper only).
@@ -26,6 +27,8 @@ import { PaperTrader } from "../paper/trader.ts";
 import { FxService } from "../market/fx.ts";
 import { QuoteClient } from "../market/quotes.ts";
 import { DEFAULT_POLICY } from "../risk/policy.ts";
+import { startDashboard } from "../dashboard/server.ts";
+import type { Server } from "node:http";
 
 const args = process.argv.slice(2);
 const minutesIdx = args.indexOf("--minutes");
@@ -42,9 +45,12 @@ const svc = new DiscoveryService({ ...deps, assessor });
 let engine: SignalEngine | undefined;
 let stream: TradeStream | undefined;
 let paperLedger: Ledger | undefined;
+let dashboard: Server | undefined;
+let paperTrader: PaperTrader | undefined;
+let riskLimits = loadRiskLimits(resolve(cfg.DATA_DIR, "risk-limits.json"), resolve(cfg.DATA_DIR, "risk-limits.confirmed"));
 if (args.includes("--signals")) {
   if (!assess) throw new Error("--signals needs --assess (the watchlist comes from gate assessments)");
-  const lim = loadRiskLimits(resolve(cfg.DATA_DIR, "risk-limits.json"), resolve(cfg.DATA_DIR, "risk-limits.confirmed"));
+  const lim = riskLimits;
   if (lim.refused.length) deps.logger.warn("refused unconfirmed limit increases; entries will be blocked", { limits: lim.refused });
   const sessions = new SessionStore(deps.db);
   stream = new TradeStream({
@@ -81,6 +87,7 @@ if (args.includes("--signals")) {
     });
     paper = { trader, ledger, fx };
     paperLedger = ledger;
+    paperTrader = trader;
     void fx.solCad().then((q) => ledger.initAccount(lim.limits.referenceEquityCad, q.solCad)).catch((e) => deps.logger.error("paper account not initialised: FX unavailable", { err: (e as Error).message }));
   }
   engine = new SignalEngine({
@@ -138,6 +145,25 @@ function printStatus(): void {
   process.stdout.write(lines.join("\n") + "\n");
 }
 
+if (args.includes("--dashboard")) {
+  const pIdx = args.indexOf("--port");
+  dashboard = startDashboard(
+    {
+      db: deps.db,
+      health: deps.health,
+      riskState: new RiskStateStore(deps.db, () => deps.clock.now()),
+      limits: riskLimits.limits,
+      limitsRefused: riskLimits.refused,
+      ledger: paperLedger,
+      marks: () => paperTrader?.marks() ?? new Map(),
+      watched: () => engine?.watched() ?? [],
+      rpcBudget: () => ({ usedToday: deps.budget.usedToday, remaining: deps.budget.remaining }),
+      now: () => deps.clock.now(),
+    },
+    deps.logger,
+    pIdx >= 0 ? Number(args[pIdx + 1]) : 4777,
+  );
+}
 deps.logger.info("starting discovery", { rpc: describeRpc(cfg.SOLANA_RPC_URL), jupiterKey: cfg.JUPITER_API_KEY ? "set" : "keyless", dataDir: cfg.DATA_DIR });
 svc.start();
 stream?.start();
@@ -152,6 +178,7 @@ function shutdown(signal: string): void {
   clearInterval(timer);
   engine?.stop();
   stream?.stop();
+  dashboard?.close();
   svc.stop();
   printStatus();
   deps.db.close();

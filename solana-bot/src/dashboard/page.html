@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solana Paper Desk</title>
+<style>
+  /* Layout: a status strip, then breakers and positions first (what needs attention), then feeds, pipeline, decisions and events in a two-column grid that stacks on phones. */
+  :root {
+    --bg: #f5f4f0; --panel: #ffffff; --line: #d9d6cf; --fg: #1b1a17; --muted: #6b6860;
+    --accent: #2b5fa8; --good: #1f7a4d; --warn: #a66b00; --bad: #b4322a; --badbg: #fbe9e7; --goodbg: #e6f3ec; --warnbg: #fbf1dd;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; --sans: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #14161a; --panel: #1c1f25; --line: #2e323a; --fg: #e8e6e1; --muted: #9a9890; --accent: #7aa7e6; --good: #5fcf8f; --warn: #e3b24a; --bad: #ef6b60; --badbg: #3a1f1c; --goodbg: #16311f; --warnbg: #3a2e12; color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg: #14161a; --panel: #1c1f25; --line: #2e323a; --fg: #e8e6e1; --muted: #9a9890; --accent: #7aa7e6; --good: #5fcf8f; --warn: #e3b24a; --bad: #ef6b60; --badbg: #3a1f1c; --goodbg: #16311f; --warnbg: #3a2e12; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 var(--sans); padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .strip { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .strip .mode { font-family: var(--mono); font-weight: 700; color: var(--good); }
+  .strip .muted { color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-top: 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; min-width: 0; }
+  .panel.wide { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; padding: 2px 6px 4px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 4px 6px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; font-family: var(--mono); }
+  .mono { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; font-family: var(--mono); }
+  .ok { background: var(--goodbg); color: var(--good); } .warn { background: var(--warnbg); color: var(--warn); } .bad { background: var(--badbg); color: var(--bad); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  .tile { border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; }
+  .tile .k { font-size: 11px; color: var(--muted); } .tile .v { font-family: var(--mono); font-size: 16px; font-weight: 600; }
+  .pos { color: var(--good); } .neg { color: var(--bad); }
+  .scroll { overflow-x: auto; }
+  .reasons { color: var(--muted); font-size: 12px; }
+  button { font: inherit; background: var(--bad); color: #fff; border: 0; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button[disabled] { opacity: .5; cursor: default; }
+  .confirm { display: none; gap: 8px; align-items: center; margin-top: 6px; }
+  .confirm.show { display: flex; }
+  .empty { color: var(--muted); font-style: italic; }
+  @media (prefers-reduced-motion: no-preference) { .pulse { animation: p 1.5s ease-in-out infinite; } @keyframes p { 50% { opacity: .4; } } }
+</style>
+</head>
+<body>
+<div class="strip">
+  <h1>Solana Paper Desk</h1>
+  <span class="mode" id="mode">PAPER</span>
+  <span id="live" class="pill ok">live trading OFF</span>
+  <span class="muted">last data <span id="lastUpdate" class="mono">–</span></span>
+  <span class="muted">RPC budget <span id="rpc" class="mono">–</span></span>
+  <span class="muted">v<span id="version"></span></span>
+  <span class="muted" id="clock"></span>
+</div>
+
+<div class="grid">
+  <div class="panel wide">
+    <h2>Circuit breakers</h2>
+    <div class="tiles" id="breakers"></div>
+    <div style="margin-top:10px">
+      <button id="haltBtn" type="button">Emergency stop: halt new entries</button>
+      <div class="confirm" id="haltConfirm">
+        <span>Halts new entries for the rest of the UTC day. Open positions are still managed. It cannot be undone today.</span>
+        <button id="haltYes" type="button">Confirm halt</button>
+        <button id="haltNo" type="button" style="background:var(--muted)">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel wide">
+    <h2>Paper account and P&amp;L</h2>
+    <div class="tiles" id="pnl"></div>
+  </div>
+
+  <div class="panel wide">
+    <h2>Open positions <span class="muted" id="posCount"></span></h2>
+    <div class="scroll"><table id="positions"></table></div>
+  </div>
+
+  <div class="panel">
+    <h2>Feeds</h2>
+    <table id="feeds"></table>
+  </div>
+
+  <div class="panel">
+    <h2>Pipeline</h2>
+    <div class="tiles" id="pipeline"></div>
+    <h2 style="margin-top:10px">Why tokens were rejected (24 h)</h2>
+    <table id="rules"></table>
+  </div>
+
+  <div class="panel">
+    <h2>Watching</h2>
+    <table id="watch"></table>
+    <h2 style="margin-top:10px">Recent rejections</h2>
+    <table id="rejections"></table>
+  </div>
+
+  <div class="panel">
+    <h2>Signals and risk decisions</h2>
+    <table id="signals"></table>
+  </div>
+
+  <div class="panel">
+    <h2>Failed orders</h2>
+    <table id="failed"></table>
+    <p class="muted">Stale or mismatched quotes in the last hour: <span id="stale" class="mono">–</span></p>
+  </div>
+
+  <div class="panel wide">
+    <h2>Recent events</h2>
+    <table id="events"></table>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ago = (t, now) => t ? (now - t < 60000 ? Math.round((now - t) / 1000) + "s ago" : Math.round((now - t) / 60000) + "m ago") : "never";
+const hhmm = (t) => new Date(t).toISOString().slice(11, 19) + "Z";
+const short = (m) => m.slice(0, 6) + "…" + m.slice(-4);
+const sol = (x, d = 4) => x === null || x === undefined ? "–" : Number(x).toFixed(d);
+const cad = (x) => x === null || x === undefined ? "–" : (x < 0 ? "−" : "") + "CAD " + Math.abs(x).toFixed(2);
+const sign = (x) => x > 0 ? "pos" : x < 0 ? "neg" : "";
+const pill = (ok, text) => `<span class="pill ${ok === true ? "ok" : ok === false ? "bad" : "warn"}">${esc(text)}</span>`;
+const empty = (cols, text) => `<tr><td colspan="${cols}" class="empty">${esc(text)}</td></tr>`;
+
+function render(s) {
+  const now = s.now;
+  $("mode").textContent = s.mode;
+  $("live").textContent = s.liveTradingEnabled ? "LIVE TRADING ON" : "live trading OFF";
+  $("live").className = "pill " + (s.liveTradingEnabled ? "bad" : "ok");
+  $("lastUpdate").textContent = ago(s.lastUpdate, now);
+  $("rpc").textContent = s.rpcBudget ? `${s.rpcBudget.usedToday} used / ${s.rpcBudget.remaining} left today` : "–";
+  $("version").textContent = s.version;
+  $("clock").textContent = hhmm(now);
+
+  $("breakers").innerHTML = s.breakers.map((b) => `<div class="tile"><div class="k">${esc(b.name)}</div><div>${pill(b.ok, b.state)}</div></div>`).join("");
+  $("haltBtn").disabled = s.breakers.some((b) => b.name === "Manual halt" && !b.ok);
+
+  const p = s.pnl, r = s.risk;
+  $("pnl").innerHTML = [
+    ["Cash", p.cashSol === null ? "no account" : sol(p.cashSol) + " SOL", ""],
+    ["Started with", p.startingSol === null ? "–" : `${sol(p.startingSol)} SOL (${cad(p.startingCad)})`, ""],
+    ["Realized P&L", `${sol(p.realizedSol)} SOL`, sign(p.realizedSol)],
+    ["Realized (CAD at entry FX)", cad(p.realizedCad), sign(p.realizedCad)],
+    ["Unrealized (net sell quotes)", `${sol(p.unrealizedSol)} SOL`, sign(p.unrealizedSol)],
+    ["Total fees paid", `${sol(p.feesSol, 6)} SOL`, ""],
+    ["Closed trades", String(p.closedCount), ""],
+    ["Drawdown today", `${sol(r.drawdownTodaySol)} SOL`, r.drawdownTodaySol > 0 ? "neg" : ""],
+    ["Loss budget left today", cad(r.lossBudgetLeftCad), r.lossBudgetLeftCad <= 0 ? "neg" : ""],
+    ["Max position", `CAD ${r.limits.maxPositionCad}`, ""],
+  ].map(([k, v, c]) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v ${c}">${esc(v)}</div></div>`).join("");
+
+  $("posCount").textContent = s.positions.length ? `(${s.positions.length})` : "";
+  $("positions").innerHTML = s.positions.length
+    ? `<tr><th>Position</th><th>State</th><th>Strategy</th><th>Age</th><th class="num">Entry</th><th class="num">Stop</th><th class="num">Target</th><th class="num">Cost (SOL)</th><th class="num">Exit now (SOL, net)</th><th class="num">Unrealized</th></tr>` +
+      s.positions.map((x) => `<tr><td class="mono">${esc(x.id)}</td><td>${pill(x.state === "OPEN" ? true : x.state === "STUCK" ? false : null, x.state)}</td><td>${esc(x.strategy)}</td><td>${x.ageS}s</td><td class="num">${esc(x.entryPrice?.toExponential(3))}</td><td class="num">${esc(x.invalidation.toExponential(3))}</td><td class="num">${esc(x.target.toExponential(3))}</td><td class="num">${sol(x.costBasisSol)}</td><td class="num">${x.exitNetSol === null ? "no quote" : sol(x.exitNetSol)}</td><td class="num ${sign(x.unrealizedSol)}">${x.unrealizedSol === null ? "–" : sol(x.unrealizedSol) + " / " + cad(x.unrealizedCad)}</td></tr>`).join("")
+    : empty(10, "No open positions. The best trade is often no trade.");
+
+  $("feeds").innerHTML = `<tr><th>Provider</th><th>Status</th><th>Last data</th><th class="num">429s</th><th class="num">Fails</th></tr>` +
+    s.feeds.map((f) => `<tr><td class="mono">${esc(f.provider)}</td><td>${pill(f.status === "UP" ? true : f.status === "DOWN" ? false : null, f.status)} <span class="reasons">${esc(f.reason)}</span></td><td>${ago(f.lastDataAt, now)}</td><td class="num">${f.rateLimitHits}</td><td class="num">${f.failures}</td></tr>`).join("");
+
+  const t = s.tokens, a = s.assessments;
+  $("pipeline").innerHTML = [["Tokens discovered", t.total], ["Confirmed on-chain", t.confirmed], ["Chain conflicts", t.conflicts], ["Assessed (24 h)", a.last24h], ["Passed gate (24 h)", a.passed24h], ["Watching", s.watchlist.length]]
+    .map(([k, v]) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`).join("");
+  $("rules").innerHTML = a.ruleCounts.length ? a.ruleCounts.slice(0, 10).map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td class="num">${v}</td></tr>`).join("") : empty(2, "No assessments in the last 24 h.");
+
+  $("watch").innerHTML = s.watchlist.length ? `<tr><th>Mint</th><th>Venue</th><th>Since</th></tr>` + s.watchlist.map((w) => `<tr><td class="mono" title="${esc(w.mint)}">${esc(short(w.mint))}</td><td>${esc(w.venue)}${w.researchOnly ? " " + pill(null, "research only") : ""}</td><td>${ago(w.addedAt, now)}</td></tr>`).join("") : empty(3, "Nothing on the watchlist.");
+  $("rejections").innerHTML = a.recentRejections.length ? a.recentRejections.slice(0, 8).map((x) => `<tr><td class="mono" title="${esc(x.mint)}">${esc(short(x.mint))}</td><td>${hhmm(x.at)}</td><td class="reasons">${esc(x.rules.join("; "))}</td></tr>`).join("") : empty(3, "No rejections yet.");
+
+  $("signals").innerHTML = s.signals.length ? `<tr><th>Time</th><th>Mint</th><th>Strategy</th><th>Decision</th><th>Why</th></tr>` + s.signals.map((x) => `<tr><td>${hhmm(x.at)}</td><td class="mono" title="${esc(x.mint)}">${esc(short(x.mint))}</td><td>${esc(x.strategy)}</td><td>${pill(x.action === "PAPER_ELIGIBLE" ? true : false, x.action === "PAPER_ELIGIBLE" ? `ENTER paper${x.sizeCad ? " CAD " + x.sizeCad : ""}` : "REJECT")}</td><td class="reasons">${esc(x.reasons.join("; "))}</td></tr>`).join("") : empty(5, "No strategy has fired yet.");
+
+  $("failed").innerHTML = s.failedOrders.length ? `<tr><th>Order</th><th>Side</th><th>When</th><th>Failure</th></tr>` + s.failedOrders.map((o) => `<tr><td class="mono">${esc(o.id)}</td><td>${esc(o.side)}</td><td>${hhmm(o.resolved_at)}</td><td class="reasons">${esc(o.failure)}</td></tr>`).join("") : empty(4, "No failed orders.");
+  $("stale").textContent = s.staleQuotesLastHour;
+
+  $("events").innerHTML = s.events.length ? s.events.map((e) => `<tr><td class="mono">${hhmm(e.at)}</td><td>${pill(e.action === "PAPER_ELIGIBLE" ? true : e.action === "REJECT" ? false : null, e.action)}</td><td class="mono" title="${esc(e.mint)}">${esc(short(e.mint))}</td><td>${esc(e.strategy)}</td><td class="reasons">${esc(e.reasons.join("; "))}</td></tr>`).join("") : empty(5, "No events yet.");
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    render(await r.json());
+    document.title = "Solana Paper Desk";
+  } catch (e) {
+    $("clock").textContent = "dashboard: bot not responding";
+    $("clock").className = "pill bad pulse";
+  }
+}
+$("haltBtn").addEventListener("click", () => $("haltConfirm").classList.add("show"));
+$("haltNo").addEventListener("click", () => $("haltConfirm").classList.remove("show"));
+$("haltYes").addEventListener("click", async () => {
+  await fetch("/api/halt", { method: "POST" });
+  $("haltConfirm").classList.remove("show");
+  refresh();
+});
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
