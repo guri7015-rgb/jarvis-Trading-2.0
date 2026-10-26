@@ -31,6 +31,7 @@ import { strategyC } from "./strategyC.ts";
 import { strategyD } from "./strategyD.ts";
 import type { Signal } from "./types.ts";
 import type { PaperTrader } from "../paper/trader.ts";
+import { DEFAULT_PARAMS, type StrategyParams } from "./params.ts";
 import type { Ledger } from "../paper/ledger.ts";
 import type { FxService, FxQuote } from "../market/fx.ts";
 
@@ -55,6 +56,8 @@ export interface EngineDeps {
   fx?: FxService;
   /** Daily halt reason, if a kill switch or limit has fired (blocks entries, never exits). */
   haltReason?: () => string | null;
+  /** Strategy parameters (defaults, or a reviewed file). */
+  params?: StrategyParams;
 }
 
 interface Watched {
@@ -328,12 +331,13 @@ export class SignalEngine {
       const cat = t ? categorize(t, now, { newLaunchMaxAgeMs: this.d.newLaunchMaxAgeMs, earlyMaxAgeMs: this.d.earlyMaxAgeMs }) : undefined;
       // Age only from a creation time that isn't merely an upper bound.
       const ctx = { tokenAgeMs: cat && cat.category !== "UNKNOWN_AGE" ? cat.ageMs : undefined };
-      const failure = strategyD(f);
+      const P = this.d.params ?? DEFAULT_PARAMS;
+      const failure = strategyD(f, {}, P.D);
       if (now - (this.lastSnapshot.get(mint) ?? 0) >= SNAPSHOT_EVERY_MS) {
         this.lastSnapshot.set(mint, now);
         this.record(now, mint, "SNAPSHOT", "SNAPSHOT", [w.target.venue, w.researchOnly ? "research-only" : "gated", ...f.quality.reasons], undefined, undefined, f);
       }
-      const signals = [strategyA(f, ctx), strategyB(f, ctx, "retest"), strategyB(f, ctx, "no_retest"), strategyC(f, ctx)];
+      const signals = [strategyA(f, ctx, P.A), strategyB(f, ctx, "retest", P.B), strategyB(f, ctx, "no_retest", P.B), strategyC(f, ctx, P.C)];
       for (const s of signals) {
         if (s.action !== "ENTER") continue;
         const key = `${mint}:${s.strategy}`;

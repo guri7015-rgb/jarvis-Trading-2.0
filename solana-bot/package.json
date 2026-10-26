@@ -18,7 +18,10 @@
     "replay": "tsx src/cli/replay.ts",
     "backtest": "tsx src/cli/backtest.ts",
     "export": "tsx src/cli/export.ts",
-    "calibrate": "tsx src/cli/calibrate.ts"
+    "calibrate": "tsx src/cli/calibrate.ts",
+    "tape": "tsx src/cli/tape.ts",
+    "tune": "tsx src/cli/tune.ts",
+    "evidence": "tsx src/cli/evidence.ts"
   },
   "dependencies": {
     "@solana/kit": "8.4.0",

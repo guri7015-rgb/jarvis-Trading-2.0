@@ -27,6 +27,8 @@ import { PaperTrader } from "../paper/trader.ts";
 import { FxService } from "../market/fx.ts";
 import { QuoteClient } from "../market/quotes.ts";
 import { DEFAULT_POLICY } from "../risk/policy.ts";
+import { priorityEstimate } from "../risk/costs.ts";
+import { loadStrategyParams } from "../strategy/params.ts";
 import { startDashboard } from "../dashboard/server.ts";
 import type { Server } from "node:http";
 
@@ -47,6 +49,7 @@ let stream: TradeStream | undefined;
 let paperLedger: Ledger | undefined;
 let dashboard: Server | undefined;
 let paperTrader: PaperTrader | undefined;
+const strategyParams = loadStrategyParams(resolve(cfg.DATA_DIR, "strategy-params.json"));
 let riskLimits = loadRiskLimits(resolve(cfg.DATA_DIR, "risk-limits.json"), resolve(cfg.DATA_DIR, "risk-limits.confirmed"));
 if (args.includes("--signals")) {
   if (!assess) throw new Error("--signals needs --assess (the watchlist comes from gate assessments)");
@@ -69,8 +72,19 @@ if (args.includes("--signals")) {
     const quotes = new QuoteClient(deps.http, () => deps.clock.now(), cfg.JUPITER_API_KEY);
     const ledger = new Ledger(deps.db, () => deps.clock.now());
     const riskState = new RiskStateStore(deps.db, () => deps.clock.now());
-    // Priority fee budget: the policy cap. Measured values replace this in Phase 6.
-    const prio = () => DEFAULT_POLICY.maxPriorityMicroLamports / 10;
+    // Live priority-fee estimate (median of recent non-zero fees, capped), refreshed every 30 s.
+    // Until the first sample arrives, budget for the cap rather than for zero.
+    let prioEstimate = DEFAULT_POLICY.maxPriorityMicroLamports;
+    const refreshPrio = () =>
+      deps.rpc
+        .getRecentPrioritizationFees()
+        .then((f) => {
+          prioEstimate = priorityEstimate(f, DEFAULT_POLICY.maxPriorityMicroLamports);
+        })
+        .catch(() => undefined);
+    void refreshPrio();
+    setInterval(() => void refreshPrio(), 30_000).unref();
+    const prio = () => prioEstimate;
     const executor = new PaperExecutor(quotes, deps.clock, prio, CONSERVATIVE_SIM);
     const trader = new PaperTrader({
       ledger,
@@ -83,6 +97,7 @@ if (args.includes("--signals")) {
       computeUnits: CONSERVATIVE_SIM.computeUnits,
       slippageBps: DEFAULT_POLICY.quoteSlippageBps,
       markEveryMs: 10_000,
+      dParams: strategyParams.params.D,
       onAlert: (m, c) => deps.logger.error(`ALERT: ${m}`, c),
     });
     paper = { trader, ledger, fx };
@@ -90,7 +105,9 @@ if (args.includes("--signals")) {
     paperTrader = trader;
     void fx.solCad().then((q) => ledger.initAccount(lim.limits.referenceEquityCad, q.solCad)).catch((e) => deps.logger.error("paper account not initialised: FX unavailable", { err: (e as Error).message }));
   }
+  deps.logger.info("strategy params", { source: strategyParams.source, sha256: strategyParams.sha256, overridden: strategyParams.overridden });
   engine = new SignalEngine({
+    params: strategyParams.params,
     trader: paper?.trader,
     ledger: paper?.ledger,
     fx: paper?.fx,

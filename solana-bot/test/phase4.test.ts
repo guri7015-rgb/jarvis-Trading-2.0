@@ -112,12 +112,19 @@ describe("features", () => {
 
   it("measures participation, imbalance, concentration and repeated sizes", () => {
     const tape = [...span(240, 300, 2, () => 1)];
-    // A single wallet buying in identical sizes.
+    // A single wallet buying in identical sizes: concentration, but not a multi-wallet size repeat.
     for (let s = 250; s < 300; s += 5) tape.push(tr(s, 1, "buy", "whale", 1.0));
     const f = computeFeatures("M", tape, sec(300));
     expect(f.topBuyerShare60).toBeGreaterThan(0.5);
-    expect(f.repeatedSizeRatio60).toBeGreaterThan(0.2);
     expect(f.imbalance60).toBe(1);
+    expect(f.repeatedSizeRatio60).toBe(0);
+    // Many wallets firing the same odd size is the bot fingerprint; round sizes are not.
+    const bots = [...span(240, 300, 2, () => 1)];
+    for (let s = 250; s < 300; s += 2) bots.push(tr(s, 1, "buy", `bot${s}`, 0.137421));
+    expect(computeFeatures("M", bots, sec(300)).repeatedSizeRatio60).toBeGreaterThan(0.4);
+    const humans = [...span(240, 300, 2, () => 1)];
+    for (let s = 250; s < 300; s += 2) humans.push(tr(s, 1, "buy", `h${s}`, 0.01));
+    expect(computeFeatures("M", humans, sec(300)).repeatedSizeRatio60).toBe(0);
   });
 
   it("builds candles only from real trades and marks sparse ones", () => {

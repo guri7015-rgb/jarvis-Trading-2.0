@@ -98,6 +98,13 @@ export interface QualityRules {
 
 export const DEFAULT_QUALITY: QualityRules = { minTrades180s: 20, maxSecondsSinceLastTrade: 30, maxMedianLagS: 10, blockingGapMs: 2_000 };
 
+/** A size a person would type: at most 2 significant digits (0.01, 0.25, 1.5, 10). */
+export function isRoundSize(sol: number): boolean {
+  if (!(sol > 0)) return true;
+  const digits = Number(sol.toPrecision(2));
+  return Math.abs(digits - sol) / sol < 1e-6;
+}
+
 const median = (a: number[]) => {
   if (!a.length) return null;
   const s = [...a].sort((x, y) => x - y);
@@ -147,12 +154,15 @@ export function computeFeatures(mint: string, all: Trade[], now: number, gaps: {
   const sellVol60 = w60.filter((t) => t.side === "sell").reduce((s, t) => s + t.quoteSol, 0);
   const byBuyer = new Map<string, number>();
   for (const t of w60) if (t.side === "buy") byBuyer.set(t.wallet, (byBuyer.get(t.wallet) ?? 0) + t.quoteSol);
-  const sizeCounts = new Map<string, number>();
+  // Bot fingerprint: the same NON-ROUND size from several different wallets within 60 s.
+  // Round sizes (0.01, 0.5, 1 SOL) repeat naturally across humans and are not counted.
+  const walletsBySize = new Map<string, Set<string>>();
   for (const t of w60) {
+    if (isRoundSize(t.quoteSol)) continue;
     const k = t.quoteSol.toFixed(6);
-    sizeCounts.set(k, (sizeCounts.get(k) ?? 0) + 1);
+    (walletsBySize.get(k) ?? walletsBySize.set(k, new Set()).get(k)!).add(t.wallet);
   }
-  const repeated = w60.filter((t) => (sizeCounts.get(t.quoteSol.toFixed(6)) ?? 0) > 1).length;
+  const repeated = w60.filter((t) => !isRoundSize(t.quoteSol) && (walletsBySize.get(t.quoteSol.toFixed(6))?.size ?? 0) >= 2).length;
   const lr: number[] = [];
   for (let i = 1; i < w180.length; i++) lr.push(Math.log(w180[i]!.priceSol / w180[i - 1]!.priceSol));
   const mean = lr.length ? lr.reduce((a, b) => a + b, 0) / lr.length : 0;

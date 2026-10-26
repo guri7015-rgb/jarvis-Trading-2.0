@@ -20,6 +20,7 @@ import { strategyB } from "../strategy/strategyB.ts";
 import { strategyC } from "../strategy/strategyC.ts";
 import { strategyD } from "../strategy/strategyD.ts";
 import type { Signal, StrategyId } from "../strategy/types.ts";
+import { DEFAULT_PARAMS, type StrategyParams } from "../strategy/params.ts";
 
 export interface CostModel {
   /** Venue fee per side, fraction (pump curve 0.0125 documented; PumpSwap by tier). */
@@ -62,8 +63,21 @@ export interface BacktestTrade {
   stuck: boolean;
 }
 
+/**
+ * Pessimistic model: Phase 3's worst-quartile impact (p75 by venue), double the haircut,
+ * more failures. A strategy that only works under the median model is not ready.
+ */
+export const COST_MODELS_WORST: Record<"pump_curve" | "pumpswap", CostModel> = {
+  pump_curve: { ...COST_MODELS.pump_curve, impactPerSide: 0.006, haircut: 0.02, failureRate: 0.2, noRouteRate: 0.05, latencyMs: [6000, 15000] },
+  pumpswap: { ...COST_MODELS.pumpswap, impactPerSide: 0.005, haircut: 0.02, failureRate: 0.2, noRouteRate: 0.03, latencyMs: [6000, 15000] },
+};
+
 export interface BacktestOptions {
   limits: RiskLimits;
+  /** Override the per-venue cost model (e.g. COST_MODELS_WORST). */
+  costModels?: Record<"pump_curve" | "pumpswap", CostModel>;
+  /** Strategy parameter overrides (research only; see strategy/params.ts). */
+  params?: StrategyParams;
   exitPolicy?: ExitPolicy;
   stepMs: number;
   sizeCad: number;
@@ -91,7 +105,8 @@ function fillRef(tape: Trade[], t: number, arrivalBy: number): Trade | undefined
 }
 
 export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tape: Trade[], gaps: { from: number; to: number }[], o: BacktestOptions): BacktestResult {
-  const cm = COST_MODELS[venue];
+  const cm = (o.costModels ?? COST_MODELS)[venue];
+  const P = o.params ?? DEFAULT_PARAMS;
   const sorted = [...tape].sort((a, b) => a.blockTimeMs - b.blockTimeMs);
   const trades: BacktestTrade[] = [];
   const rejected: Record<string, number> = {};
@@ -119,7 +134,7 @@ export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tap
       const sellNet = lastPx !== null ? held * lastPx * (1 - cm.venueFeePerSide - cm.impactPerSide) - cm.networkFeeSol : undefined;
       if (sellNet !== undefined) open.peakNet = Math.max(open.peakNet, sellNet);
       const routeOk = !(open.stuck && o.random() > 0.3); // a stuck route comes back with 30% chance per tick
-      const failure = strategyD(f, { breakoutLevel: open.sig.strategy.startsWith("B_") ? open.sig.maxEntryPrice : undefined, invalidationPrice: open.sig.invalidationPrice });
+      const failure = strategyD(f, { breakoutLevel: open.sig.strategy.startsWith("B_") ? open.sig.maxEntryPrice : undefined, invalidationPrice: open.sig.invalidationPrice }, P.D);
       const d = decideExit(
         { entryAt: open.entryAt, entryPrice: open.entryPrice, costBasisSol: open.costBasis, invalidationPrice: open.sig.invalidationPrice!, targetPrice: open.sig.targetPrice!, timeStopMs: open.sig.timeStopMs!, peakNetSol: open.peakNet, partialTaken: open.partial },
         { now, lastPrice: lastPx, sellNetSol: routeOk ? sellNet : undefined, sellRouteAvailable: routeOk, tokenRestricted: false, riskLimitBreached: false, failure },
@@ -173,12 +188,12 @@ export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tap
     }
     // Entries.
     const ctx = { tokenAgeMs: o.tokenAgeMs };
-    const failure = strategyD(f);
+    const failure = strategyD(f, {}, P.D);
     const sigs: Signal[] = [];
-    if (strategies.includes("A_continuation")) sigs.push(strategyA(f, ctx));
-    if (strategies.includes("B_breakout_retest")) sigs.push(strategyB(f, ctx, "retest"));
-    if (strategies.includes("B_breakout_no_retest")) sigs.push(strategyB(f, ctx, "no_retest"));
-    if (strategies.includes("C_early_acceleration")) sigs.push(strategyC(f, ctx));
+    if (strategies.includes("A_continuation")) sigs.push(strategyA(f, ctx, P.A));
+    if (strategies.includes("B_breakout_retest")) sigs.push(strategyB(f, ctx, "retest", P.B));
+    if (strategies.includes("B_breakout_no_retest")) sigs.push(strategyB(f, ctx, "no_retest", P.B));
+    if (strategies.includes("C_early_acceleration")) sigs.push(strategyC(f, ctx, P.C));
     for (const s of sigs) {
       if (s.action !== "ENTER") continue;
       if ((cooldown.get(s.strategy) ?? 0) > now) continue;

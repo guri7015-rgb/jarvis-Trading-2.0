@@ -19,7 +19,7 @@ import type { RiskStateStore } from "../risk/riskState.ts";
 import { MINTS } from "../solana/programs.ts";
 import { DEFAULT_EXIT_POLICY, decideExit, type ExitDecision, type ExitPolicy } from "../strategy/exits.ts";
 import type { Features } from "../strategy/features.ts";
-import { strategyD } from "../strategy/strategyD.ts";
+import { D_PARAMS, strategyD } from "../strategy/strategyD.ts";
 import type { Signal } from "../strategy/types.ts";
 import type { PaperExecutor } from "./executor.ts";
 import { Ledger, type PositionRow } from "./ledger.ts";
@@ -37,6 +37,8 @@ export interface TraderDeps {
   exitPolicy?: ExitPolicy;
   /** Sell-quote refresh cadence for open positions (rate-limit budget). */
   markEveryMs: number;
+  /** Strategy D parameters for exit checks. */
+  dParams?: typeof D_PARAMS;
   onAlert?: (msg: string, ctx: Record<string, unknown>) => void;
 }
 
@@ -133,7 +135,7 @@ export class PaperTrader {
         if (mark.route) this.d.ledger.updateMark(p.id, mark.net);
       }
       const costBasis = BigInt(p.cost_basis_lamports);
-      const failure = features ? strategyD(features, { breakoutLevel: p.breakout_level ?? undefined, invalidationPrice: p.invalidation_price, realQuoteSolAtEntry: p.real_quote_sol_at_entry ?? undefined }) : { action: "NONE" as const, reasons: [] };
+      const failure = features ? strategyD(features, { breakoutLevel: p.breakout_level ?? undefined, invalidationPrice: p.invalidation_price, realQuoteSolAtEntry: p.real_quote_sol_at_entry ?? undefined }, this.d.dParams ?? D_PARAMS) : { action: "NONE" as const, reasons: [] };
       const decision = decideExit(
         {
           entryAt: p.opened_at ?? now,
