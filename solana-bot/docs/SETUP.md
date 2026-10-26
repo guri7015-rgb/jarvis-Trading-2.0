@@ -1,28 +1,25 @@
-# Local Setup
+# Local Setup (Mac)
 
-## A note on "detect my OS"
+Everything runs on your Mac. No database server, no Docker, no paid services, and no wallet in this phase.
 
-I can't see your computer. This development session runs in a Linux cloud container, so anything I detect here describes the container, not your machine. Instructions for all three systems are below. Tell me which one you use and I'll trim this page to it.
+## 1. Install Node
 
-To check yourself:
-- **macOS:** Apple menu → About This Mac.
-- **Windows:** Start → Settings → System → About.
-- **Linux:** run `uname -a` in a terminal.
+The bot needs Node 22.13 or newer. Node 24 LTS is recommended.
 
-## What you need
-
-- **Node.js 22.13 or newer.** Node 24 LTS is recommended. The bot uses Node's built-in SQLite, which needs 22.13+.
-- **Git.**
-- No database server, no Docker and no paid services.
-- No wallet in this phase.
-
-## macOS
+Open Terminal and run:
 
 ```bash
-# Install Node 24 LTS (Homebrew), or use the installer from nodejs.org
+# If you have Homebrew:
 brew install node@24
-node -v   # must print v22.13+ or v24.x
+# Otherwise download the macOS installer from https://nodejs.org (LTS).
+node -v
+```
 
+`node -v` must print `v22.13` or higher, or `v24.x`.
+
+## 2. Get the code
+
+```bash
 git clone https://github.com/guri7015-rgb/jarvis-Trading-2.0.git
 cd jarvis-Trading-2.0
 git checkout claude/solana-meme-coin-bot-arch-31tujw
@@ -32,69 +29,47 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-## Windows
+## 3. Add your free keys (you do this; never paste them into chat)
 
-Two options. Native Windows works because the bot needs no compiled add-ons. WSL2 (Ubuntu) also works and matches the cloud container more closely.
+1. **Jupiter.** Create a free key at https://developers.jup.ag/portal. Put it after `JUPITER_API_KEY=` in `solana-bot/.env`. Without it, the bot runs keyless at half speed.
+2. **Helius.** Create a free-plan key at https://www.helius.dev. Set `SOLANA_RPC_URL` and `SOLANA_WS_URL` in `.env` to the mainnet URLs Helius gives you. They contain your key. **This one matters:** the public Solana endpoint refuses holder data, so without Helius every token fails the safety gate.
+3. Leave `RPC_DAILY_CALL_BUDGET=25000` alone. It keeps the Helius free plan (1M credits a month) from running out.
 
-**Native (PowerShell):**
+`.env` is in `.gitignore`. It should never show up in `git status`.
 
-```powershell
-winget install OpenJS.NodeJS.LTS
-node -v
-git clone https://github.com/guri7015-rgb/jarvis-Trading-2.0.git
-cd jarvis-Trading-2.0
-git checkout claude/solana-meme-coin-bot-arch-31tujw
-cd solana-bot
-npm ci
-Copy-Item .env.example .env
-```
-
-Restrict `.env` to your user. In File Explorer, open Properties → Security on the file.
-
-**WSL2:** run `wsl --install`, open Ubuntu, then follow the Linux steps.
-
-## Linux (Ubuntu/Debian)
+## 4. Run
 
 ```bash
-# Node 24 LTS via nvm (no sudo needed)
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-. ~/.nvm/nvm.sh && nvm install 24
-git clone https://github.com/guri7015-rgb/jarvis-Trading-2.0.git
-cd jarvis-Trading-2.0 && git checkout claude/solana-meme-coin-bot-arch-31tujw
-cd solana-bot && npm ci && cp .env.example .env && chmod 600 .env
+npm test                                   # automated tests, no network needed
+npm run probe                              # one-shot check that each data source answers
+npm run discover -- --minutes 60           # discovery only
+npm run discover -- --assess --minutes 60  # also price CAD 30 round trips (quotes only)
+npm run discover -- --assess --signals     # also watch trades and record strategy decisions (paper only)
+npm run coverage                           # discovery report
+npm run costs                              # cost report
+npm run signals                            # strategy and risk report
 ```
 
-## Adding your free keys (do this yourself; never paste them into chat)
+Ctrl+C stops the bot cleanly. State is saved in `solana-bot/data/`.
 
-1. **Jupiter:**
-   - Create a free key at https://developers.jup.ag/portal.
-   - Put it after `JUPITER_API_KEY=` in `solana-bot/.env`.
-   - Without it, the bot runs keyless at half speed.
-2. **Helius:**
-   - Create a free-plan key at https://www.helius.dev.
-   - Set `SOLANA_RPC_URL` and `SOLANA_WS_URL` to the mainnet URLs Helius gives you. They contain your key.
-   - Without it, the bot uses the public Solana endpoint. That endpoint is fine for testing and is "not intended for production".
-3. Leave `RPC_DAILY_CALL_BUDGET=25000` unless you have a reason. It keeps the Helius free plan (1M credits a month) from running out.
-
-`.env` is listed in `.gitignore`. Check that it never shows up in `git status`.
-
-## Run
+Node prints `ExperimentalWarning: SQLite is an experimental feature` once at startup. That's expected. To hide it:
 
 ```bash
-npm test           # automated tests; no network needed
-npm run typecheck
-npm run probe      # one-shot check that each data source answers
-npm run discover   # live discovery; Ctrl+C to stop (state is saved in ./data)
-npm run discover -- --minutes 60
-npm run coverage   # report from what discovery has recorded
-npm run coverage -- --hours 2 --dexscreener
+export NODE_OPTIONS=--no-warnings
 ```
 
-Node prints `ExperimentalWarning: SQLite is an experimental feature` once at startup. That is expected on Node 22 and 24. To hide it, set `NODE_OPTIONS=--no-warnings`.
+## 5. Keeping it running (for Phase 6 forward testing)
 
-## Restarting safely
+Your Mac must stay awake. In System Settings → Battery (or Energy), turn off "Put hard disks to sleep" and set the display to sleep but not the computer. Or run the bot with:
 
-- **Stopping:** Ctrl+C stops cleanly.
-- **Crashes:** a crash or power cut is detected on the next start. The time the bot was down is recorded as a data gap.
-- **No double-counting:** dedupe keys and the RPC budget live in `data/solana-bot.sqlite`, so a restart never double-counts tokens or resets the budget.
-- **Wiping:** to start fresh, stop the bot and delete `data/`. That throws away the discovery history.
+```bash
+caffeinate -i npm run discover -- --assess --signals
+```
+
+`caffeinate -i` stops the Mac from idling to sleep while the bot runs.
+
+## Restarts
+
+- A crash or power cut is noticed on the next start. The downtime is recorded as a data gap.
+- Dedupe keys, the RPC budget and daily risk limits live in `data/solana-bot.sqlite`. A restart never double-counts tokens or resets a loss limit.
+- To start fresh, stop the bot and delete `data/`. That throws away all history.
