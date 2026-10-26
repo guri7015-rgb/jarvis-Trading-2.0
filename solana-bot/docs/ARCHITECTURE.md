@@ -20,9 +20,13 @@ Operating mode for everything described below until Phase 9 approval: **paper on
    - **Wallet:** none is needed.
 3. **Jupiter can quote pump.fun tokens.** It routes pump.fun bonding-curve tokens, PumpSwap, Raydium LaunchLab and Meteora DBC. One live quote on a token minted the same morning routed through "Pump.fun". Free limits are tight: 0.5 req/s with no key, 1 req/s with a free key.
 4. **The cost math is the biggest risk to the whole idea.**
-   - Pump.fun's documented curve fee is 1% on buys and 1% on sells.
+   - **Correction (Phase 2):** Phase 1 said the curve fee was a flat 1% each way. That was wrong.
+   - Pump.fun's fee docs (`FEE_PROGRAM_README.md`, `fees.png`) set fees by market cap:
+     - On the bonding curve: **1.25% per trade** (0.30% creator + 0.95% protocol).
+     - On PumpSwap: from 1.25% down to 0.30% as market cap rises.
+   - Newer program versions also add buyback, cashback and holder-reward fees. The live values sit in the on-chain `FeeConfig` account, and Phase 3 will read them rather than trust a table.
    - Add price impact, priority fees and the token-account rent you lock up.
-   - On a CAD $30 position, round-trip costs likely sit around **2–4%** before any adverse move. That is a guess, and Phase 3 will measure it.
+   - On a CAD $30 position on the curve, fees alone are about **2.5% round trip**. Total round-trip cost is likely **3–5%** before any adverse move. That total is a guess, and Phase 3 will measure it.
    - The strategy has to beat that, repeatedly, against faster bots. If it can't, the honest result is "don't trade."
 5. **We will be slower than the snipers.** A home or cheap-VPS setup on free data reacts in seconds, not milliseconds. Strategy C, early acceleration, will face the worst adverse selection. A and B work on tokens with a few minutes of history and are the more realistic research targets.
 
@@ -327,8 +331,9 @@ Logs pass through a redactor that strips anything matching key or base58-secret 
 
 | Item | Source | Status |
 |---|---|---|
-| Pump.fun curve fee 1% buy + 1% sell | pump.fun official program docs | Verified as documented. **Live fee config may differ**; Phase 3 reads it on-chain. |
-| PumpSwap / Raydium / Meteora pool fees | Each venue | **Unverified**. Phase 3 measures them from quotes vs reserve math. |
+| Pump.fun curve fee: 1.25% per buy and per sell (0.30% creator + 0.95% protocol) | pump.fun `FEE_PROGRAM_README.md` + `fees.png` | Documented tier table. **Corrects Phase 1's "1%".** Live values are in the on-chain `FeeConfig` account plus per-curve `creator_fee_bps`; Phase 3 reads them. |
+| PumpSwap canonical pools: 1.25% → 0.30% total by market cap | Same table | Documented. Non-canonical pools use `flatFees`. |
+| Raydium / Meteora pool fees | Each venue | **Unverified**. Phase 3 measures them from quotes vs reserve math. |
 | Jupiter fee on `/build` | Jupiter docs | 0 (verified) |
 | Base fee | Solana docs | 5,000 lamports per signature (verified) |
 | Priority fee | Market | Unknown. Measured via `getRecentPrioritizationFees`, then capped. |
@@ -372,6 +377,22 @@ Logs pass through a redactor that strips anything matching key or base58-secret 
 | 9 | Dedicated wallet, capped live trading | — |
 
 ---
+
+## 6a. Phase 2 design decisions (added after Phase 2 research)
+
+1. **Pump.fun events are inner instructions, not log lines.**
+   - pump.fun's `create`, `buy` and `sell` instructions carry `event_authority` + `program` accounts. That is Anchor's self-CPI event pattern.
+   - So `TradeEvent` / `CreateEvent` data is not in `logsSubscribe` output.
+   - Reading wallet-level trades needs one `getTransaction` per trade. On the free plans that is the binding limit.
+2. **Phase 2 therefore does discovery from cheap sources and confirms on-chain in batches.**
+   - Discovery: PumpPortal stream, GeckoTerminal and Jupiter polls.
+   - Confirmation: one `getMultipleAccounts` call reads the mint plus our own derived bonding-curve address for 50 tokens. That is about 2 calls per 100 tokens.
+3. **Trade flow is deferred to Phase 3, for a small watchlist only.** Two options:
+   - Per-token `accountSubscribe` on the curve or pool, for reserves.
+   - Sampled `getTransaction`, for wallets.
+   - Both are budgeted.
+4. **Bonding-curve accounts are decoded from the official IDL field order.** Shorter, older layouts are handled, and fields we can't read are reported as absent or assumed.
+5. **Most pump.fun mints are now Token-2022.** Every live sample so far uses Token-2022 with MetadataPointer + TokenMetadata extensions. The extension list is decoded on every confirmation, so Phase 3's safety gate can reject the dangerous ones.
 
 ## 7. Open questions for you
 

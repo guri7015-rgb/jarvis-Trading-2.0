@@ -10,7 +10,12 @@ These are the sources behind `ARCHITECTURE.md`.
 - **Official docs repo** (fetched): https://github.com/pump-fun/pump-public-docs
   - Bonding curve program: `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P`
   - PumpSwap AMM: `pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA`
-  - The docs say the curve charges a 1% fee on buys and sells, and that completed curves migrate to PumpSwap.
+  - Completed curves migrate to PumpSwap.
+  - **Fees (corrected in Phase 2).** The 1% figure in `PUMP_PROGRAM_README.md` is out of date.
+    - `FEE_PROGRAM_README.md` and `fees.png` set fees by market cap.
+    - Bonding curve: 1.25% per trade (0.30% creator + 0.95% protocol).
+    - PumpSwap canonical pools: 1.25% down to 0.30%.
+    - Live values are in the on-chain `FeeConfig` account.
   - Recent program changes: `create_v2`, `buy_v3`/`sell_v3`, PumpSwap `buy_v2`/`sell_v2`/`multi_hop_swap`. `virtual_quote_reserves` can be negative.
 - **Hosted API:** no official REST API, developer portal or approval process was found. The `frontend-api*.pump.fun` hosts are undocumented and are not used.
 - **Terms:** https://pump.fun/docs/terms-and-conditions returned HTTP 403 (excerpt only). It appears to restrict bots unless "expressly permitted" and to exclude "Prohibited Jurisdictions". The Canada status is UNVERIFIED.
