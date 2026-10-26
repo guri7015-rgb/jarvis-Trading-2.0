@@ -68,7 +68,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, dotEnvPath = re
   return {
     ...cfg,
     discovery: {
-      geckoPollMs: 20_000,
+      // 20s drew repeated 429s from a shared cloud IP; 30s stays well inside the keyless limit.
+      geckoPollMs: 30_000,
       jupiterRecentPollMs: 30_000,
       pumpportalMaxSilenceMs: 60_000,
       pollMaxAgeFactor: 4,
