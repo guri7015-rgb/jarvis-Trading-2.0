@@ -30,6 +30,8 @@ export interface GateInput {
   mint: DecodedMint | Error;
   /** Fresh read, pump.fun tokens only. */
   curve?: DecodedBondingCurve | null;
+  /** Position size in lamports, for comparing against curve reserves. */
+  sizeLamports?: bigint;
   holders: HolderReport | Error;
   buy: Quote | Error;
   sell: Quote | Error | undefined;
@@ -98,6 +100,14 @@ export function evaluateGate(i: GateInput, p: RiskPolicy): GateResult {
   if (i.curve) {
     const onCurve = !(i.buy instanceof Error) && i.buy.routeLabels.includes("Pump.fun");
     if (i.curve.complete && onCurve) reject("CURVE_COMPLETE", "market", "curve complete", "trading curve", "ONCHAIN_CONFIRMED");
+    // Seen live: every token that could be bought but not sold was a mayhem-mode curve
+    // with large virtual reserves and almost no real SOL behind them.
+    if (i.curve.isMayhemMode) reject("MAYHEM_MODE_CURVE", "structural", "mayhem mode", "normal curve", "ONCHAIN_CONFIRMED");
+    if (!i.curve.complete && i.sizeLamports !== undefined) {
+      const need = i.sizeLamports * BigInt(p.minCurveRealSolMultiple);
+      if (i.curve.realQuoteReserves < need)
+        reject("CURVE_REAL_SOL_THIN", "market", `${(Number(i.curve.realQuoteReserves) / 1e9).toFixed(4)} SOL real`, `>= ${(Number(need) / 1e9).toFixed(3)} SOL (${p.minCurveRealSolMultiple}x size)`, "ONCHAIN_CONFIRMED");
+    }
   }
   for (const [side, bps] of [["BUY", i.impliedBuyFeeBps], ["SELL", i.impliedSellFeeBps]] as const) {
     if (bps !== undefined && Math.abs(bps - p.documentedCurveFeeBps) > 50)

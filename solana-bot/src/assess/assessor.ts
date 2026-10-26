@@ -243,7 +243,7 @@ export class Assessor {
     const isf = curve && sell && !(sell instanceof Error) ? impliedSellFeeBps(curve, sell) : undefined;
     const now = this.d.clock.now();
     const gate = evaluateGate(
-      { now, confirmStatus: token?.confirm_status ?? "MISSING", mint, curve, holders, buy, sell, costs, impliedBuyFeeBps: ibf, impliedSellFeeBps: isf, fxError },
+      { now, confirmStatus: token?.confirm_status ?? "MISSING", mint, curve, sizeLamports: size, holders, buy, sell, costs, impliedBuyFeeBps: ibf, impliedSellFeeBps: isf, fxError },
       p,
     );
 

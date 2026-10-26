@@ -170,6 +170,12 @@ const MIGRATIONS: string[] = [
   CREATE INDEX assessments_mint ON assessments (mint, at);
   CREATE INDEX assessments_at ON assessments (at);
   `,
+  // 5: the curve decoder used to reject the oldest 49-byte curve layout, which made
+  // those tokens look like they had no curve. Send them back for confirmation.
+  `
+  UPDATE tokens SET confirm_status = 'PENDING', confirm_note = NULL, confirm_attempts = 0
+  WHERE confirm_status = 'CONFLICT' AND confirm_note = 'no pump.fun bonding curve at the address derived from this mint';
+  `,
 ];
 
 export function openDb(path: string): DatabaseSync {

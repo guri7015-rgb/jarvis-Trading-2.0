@@ -21,7 +21,8 @@ export interface DecodedBondingCurve {
   realQuoteReserves: bigint;
   tokenTotalSupply: bigint;
   complete: boolean;
-  creator: string;
+  /** Absent on the oldest (49-byte) layout, which predates the creator field. */
+  creator: string | null;
   isMayhemMode: boolean | undefined;
   /**
    * Quote mint. When the field is absent (older layout) or all zeros we report
@@ -32,7 +33,8 @@ export interface DecodedBondingCurve {
   quoteMintAssumed: boolean;
 }
 
-const REQUIRED_LEN = 8 + 8 * 5 + 1 + 32; // through `creator`
+/** Through `complete`. Seen live: 49-byte curves from long-graduated tokens with no creator field. */
+const REQUIRED_LEN = 8 + 8 * 5 + 1;
 const ZERO_ADDRESS = "11111111111111111111111111111111";
 
 export function decodeBondingCurve(data: Uint8Array): DecodedBondingCurve {
@@ -54,7 +56,7 @@ export function decodeBondingCurve(data: Uint8Array): DecodedBondingCurve {
   const tokenTotalSupply = u64();
   const completeByte = dv.getUint8(off++);
   if (completeByte > 1) throw new DecodeError(`bad bool ${completeByte}`);
-  const creator = bytesToAddress(data.subarray(off, off + 32));
+  const creator = off + 32 <= data.length ? bytesToAddress(data.subarray(off, off + 32)) : null;
   off += 32;
   let isMayhemMode: boolean | undefined;
   if (off + 1 <= data.length) isMayhemMode = dv.getUint8(off) === 1;

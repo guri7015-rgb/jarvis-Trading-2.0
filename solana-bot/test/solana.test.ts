@@ -74,6 +74,12 @@ describe("decodeBondingCurve (real account bytes)", () => {
     expect(c.quoteMintAssumed).toBe(true);
   });
 
+  it("decodes the oldest 49-byte layout (seen live on graduated tokens) with no creator", () => {
+    const c = decodeBondingCurve(curveAcc.data.subarray(0, 49));
+    expect(c.creator).toBeNull();
+    expect(c.virtualTokenReserves).toBe(1_073_000_000_000_000n);
+  });
+
   it("rejects the wrong discriminator and short data", () => {
     const d = Uint8Array.from(curveAcc.data);
     d[0] = 0;

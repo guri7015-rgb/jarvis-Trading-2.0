@@ -37,6 +37,12 @@ export interface RiskPolicy {
   recheckAfterStructuralRejectMs: number;
   /** Rejects caused only by missing data (rate limits, outages) are retried sooner. */
   recheckAfterDataRejectMs: number;
+  /**
+   * A pump.fun curve must hold at least this many times our position in REAL
+   * SOL. Sells are paid from real reserves only; virtual reserves set the price
+   * but can't pay anyone out.
+   */
+  minCurveRealSolMultiple: number;
   /** Documented pump.fun curve fee per side, used to flag quotes that disagree with it. */
   documentedCurveFeeBps: number;
   /** Skip candidates whose provider-reported liquidity is below this (saves RPC budget). */
@@ -70,6 +76,7 @@ export const DEFAULT_POLICY: RiskPolicy = {
   recheckAfterMarketRejectMs: 10 * 60_000,
   recheckAfterStructuralRejectMs: 24 * 3_600_000,
   recheckAfterDataRejectMs: 2 * 60_000,
+  minCurveRealSolMultiple: 5,
   documentedCurveFeeBps: 125,
   minCandidateLiquidityUsd: 5_000,
   assessIntervalMs: 30_000,

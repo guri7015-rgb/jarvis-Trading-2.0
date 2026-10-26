@@ -15,6 +15,12 @@ import { openDb } from "../src/storage/db.ts";
 import { fixtureJson, PUMP_CURVE, PUMP_MINT, rpcFixtureAccounts } from "./helpers.ts";
 
 const fx = rpcFixtureAccounts();
+/** The real curve fixture, but holding 50 SOL of real reserves (offset 32 = real_quote_reserves). */
+function healthyCurve(): RawAccount {
+  const d = Uint8Array.from(fx.accounts[1]!.data);
+  new DataView(d.buffer).setBigUint64(32, 50_000_000_000n, true);
+  return { ...fx.accounts[1]!, data: d };
+}
 const SUPPLY = 1_000_000_000_000_000n;
 const W1 = "7GhWwhaMgbKiRWxF93Bud6HnHMci6NCLTJyTxG8zFH51";
 const W2 = "6kus2N4vwjCd55V3UaSPJQGqg2zWy5QgeA7v16Mpmt3p";
@@ -131,7 +137,7 @@ describe("Assessor end to end (fake network)", () => {
     registry.ingest(create);
     db.prepare("UPDATE tokens SET confirm_status='CONFIRMED' WHERE mint=?").run(PUMP_MINT);
     const derived = await derivePumpBondingCurve(PUMP_MINT);
-    const { rpc, calls } = holderRpc({ [derived]: fx.accounts[1]! });
+    const { rpc, calls } = holderRpc({ [derived]: healthyCurve() });
     const q = fakeQuotes(sellFails);
     const a = new Assessor({ db, registry, rpc, budget: new CallBudget(10_000, clock), quotes: q.qc, fx: fakeFx, clock, logger: silentLogger, policy: DEFAULT_POLICY });
     return { a, db, asked: q.asked, calls, clock };

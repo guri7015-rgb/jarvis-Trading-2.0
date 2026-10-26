@@ -205,6 +205,14 @@ describe("tradability gate", () => {
     expect(r.flags.map((x) => x.rule)).toContain("BUY_FEE_DIFFERS");
   });
 
+  it("rejects a mayhem-mode curve and a curve with too little real SOL to pay out a sell", () => {
+    const curve = decodeBondingCurve(pump.accounts[1]!.data); // real fixture: 1 lamport of real SOL
+    const r = rules({ ...base(), curve: { ...curve, isMayhemMode: true }, sizeLamports: 213_800_000n });
+    expect(r).toEqual(expect.arrayContaining(["MAYHEM_MODE_CURVE", "CURVE_REAL_SOL_THIN"]));
+    const healthy = { ...curve, realQuoteReserves: 5n * 213_800_000n };
+    expect(rules({ ...base(), curve: healthy, sizeLamports: 213_800_000n })).toEqual([]);
+  });
+
   it("waits longer before rechecking a structural reject than a market one", () => {
     const structural = evaluateGate({ ...base(), mint: { ...goodMint, mintAuthority: "X" } }, DEFAULT_POLICY);
     const market = evaluateGate({ ...base(), sell: { ...sell(), priceImpact: 1 } }, DEFAULT_POLICY);
