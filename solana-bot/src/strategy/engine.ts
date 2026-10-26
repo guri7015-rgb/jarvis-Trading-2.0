@@ -30,6 +30,9 @@ import { strategyB } from "./strategyB.ts";
 import { strategyC } from "./strategyC.ts";
 import { strategyD } from "./strategyD.ts";
 import type { Signal } from "./types.ts";
+import type { PaperTrader } from "../paper/trader.ts";
+import type { Ledger } from "../paper/ledger.ts";
+import type { FxService, FxQuote } from "../market/fx.ts";
 
 export interface EngineDeps {
   db: DatabaseSync;
@@ -46,6 +49,12 @@ export interface EngineDeps {
   research: boolean;
   newLaunchMaxAgeMs: number;
   earlyMaxAgeMs: number;
+  /** Phase 5: when present, approved entries open paper positions and open positions are managed each tick. */
+  trader?: PaperTrader;
+  ledger?: Ledger;
+  fx?: FxService;
+  /** Daily halt reason, if a kill switch or limit has fired (blocks entries, never exits). */
+  haltReason?: () => string | null;
 }
 
 interface Watched {
@@ -67,7 +76,8 @@ export class SignalEngine {
   private lastSnapshot = new Map<string, number>();
   private timers: unknown[] = [];
   private running = false;
-  public stats = { ticks: 0, signals: 0, approved: 0, rejected: 0, tradesStored: 0, watchAdds: 0, watchDrops: 0 };
+  private fxCache: { q: FxQuote; at: number } | undefined;
+  public stats = { ticks: 0, signals: 0, approved: 0, rejected: 0, tradesStored: 0, watchAdds: 0, watchDrops: 0, paperEntries: 0 };
 
   constructor(private readonly d: EngineDeps) {}
 
@@ -103,9 +113,7 @@ export class SignalEngine {
       void run();
     };
     loop(() => this.refreshWatchlist(), 30_000);
-    loop(async () => {
-      this.tick();
-    }, 5_000);
+    loop(() => this.cycle(), 5_000);
   }
 
   stop(): void {
@@ -229,8 +237,74 @@ export class SignalEngine {
     return (this.d.db.prepare("SELECT from_ms, to_ms FROM gaps WHERE to_ms >= ? AND provider IN ('all','solana_ws')").all(since) as { from_ms: number; to_ms: number }[]).map((g) => ({ from: g.from_ms, to: g.to_ms }));
   }
 
+  private async fx(): Promise<FxQuote | undefined> {
+    if (!this.d.fx) return undefined;
+    const now = this.d.clock.now();
+    if (this.fxCache && now - this.fxCache.at < 60_000) return this.fxCache.q;
+    try {
+      const q = await this.d.fx.solCad();
+      this.fxCache = { q, at: now };
+      return q;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Open positions are never left unmanaged: this runs whether or not entries are halted. */
+  private async managePositions(featuresByMint: Map<string, Features>, solCad: number | null): Promise<void> {
+    const trader = this.d.trader;
+    if (!trader) return;
+    // A halt blocks new entries only; it is not by itself a reason to flatten.
+    // `riskLimitBreached` is reserved for an explicit kill switch (haltReason starting with "KILL").
+    const kill = (this.d.haltReason?.() ?? this.d.riskState.today().haltedReason ?? "").startsWith("KILL");
+    for (const p of this.ledgerOpen()) {
+      await trader.manage(p, featuresByMint.get(p.mint), solCad, kill);
+    }
+  }
+
+  private ledgerOpen() {
+    return this.d.ledger?.open() ?? [];
+  }
+
   /** One pass over the watchlist. Returns the decisions made, for tests. */
   tick(): { mint: string; signal: Signal; decision: RiskDecision }[] {
+    const { out } = this.evaluate();
+    return out;
+  }
+
+  /** Full cycle: evaluate signals, open approved paper entries, manage open positions. */
+  async cycle(): Promise<void> {
+    const { out, features } = this.evaluate();
+    const trader = this.d.trader;
+    if (!trader) return;
+    const fx = await this.fx();
+    for (const r of out) {
+      if (!r.decision.approved || !fx) continue;
+      const t = this.d.registry.get(r.mint);
+      const w = this.watch.get(r.mint);
+      if (!t || !w) continue;
+      const f = features.get(r.mint);
+      const pos = await trader.enter({
+        mint: r.mint,
+        venue: w.target.venue,
+        decimals: w.decimals,
+        program: t.mint_program === "token" ? "token" : "token2022",
+        signal: r.signal,
+        decision: r.decision,
+        fx,
+        realQuoteSol: f?.realQuoteSol ?? undefined,
+      });
+      if (pos) this.stats.paperEntries++;
+    }
+    await this.managePositions(features, fx?.solCad ?? null);
+    try {
+      this.d.ledger?.snapshot(trader.marks(), fx?.solCad ?? null);
+    } catch {
+      /* account not initialised yet */
+    }
+  }
+
+  private evaluate(): { out: { mint: string; signal: Signal; decision: RiskDecision }[]; features: Map<string, Features> } {
     this.stats.ticks++;
     const now = this.d.clock.now();
     const gate = this.d.health.gate();
@@ -238,9 +312,18 @@ export class SignalEngine {
     const feedsHealthy = gate.open && ws.status !== "DOWN";
     const feedReasons = [...gate.reasons, ...(ws.status === "DOWN" ? [`trade feed ${ws.reason}`] : [])];
     const out: { mint: string; signal: Signal; decision: RiskDecision }[] = [];
+    const featuresByMint = new Map<string, Features>();
     const state = this.d.riskState.today();
-    for (const [mint, w] of this.watch) {
+    const openPositions = this.ledgerOpen();
+    const pendingOrders = this.d.ledger?.pending().length ?? 0;
+    const openRiskCad = this.d.trader?.openRiskCad() ?? 0;
+    // Positions on tokens no longer watched still need features for exits.
+    const mints = new Set([...this.watch.keys(), ...openPositions.map((p) => p.mint)]);
+    for (const mint of mints) {
+      const w = this.watch.get(mint);
       const f = computeFeatures(mint, this.loadTrades(mint, now - 300_000), now, this.gaps(now - 300_000));
+      featuresByMint.set(mint, f);
+      if (!w) continue;
       const t = this.d.registry.get(mint);
       const cat = t ? categorize(t, now, { newLaunchMaxAgeMs: this.d.newLaunchMaxAgeMs, earlyMaxAgeMs: this.d.earlyMaxAgeMs }) : undefined;
       // Age only from a creation time that isn't merely an upper bound.
@@ -268,9 +351,9 @@ export class SignalEngine {
             assessment: this.assessment(mint),
             lastPrice: f.last,
             state,
-            openPositions: 0,
-            pendingOrders: 0,
-            openRiskCad: 0,
+            openPositions: openPositions.length,
+            pendingOrders,
+            openRiskCad,
             limitsRefused: this.d.limitsRefused,
           },
           this.d.limits,
@@ -279,9 +362,10 @@ export class SignalEngine {
         else this.stats.rejected++;
         this.record(now, mint, s.strategy, decision.approved ? "PAPER_ELIGIBLE" : "REJECT", decision.approved ? s.reasons : [`${decision.firstFailure}: ${decision.steps.find((x) => !x.ok)?.detail ?? ""}`], s, decision, f);
         out.push({ mint, signal: s, decision });
+        if (decision.approved) break; // one approved entry per token per tick
       }
     }
-    return out;
+    return { out, features: featuresByMint };
   }
 
   private record(at: number, mint: string, strategy: string, action: string, reasons: string[], s?: Signal, d?: RiskDecision, f?: Features): void {

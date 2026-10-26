@@ -220,6 +220,91 @@ const MIGRATIONS: string[] = [
     updated_at INTEGER NOT NULL
   );
   `,
+  // 7: Phase 5 paper ledger. Append-only orders and fills; positions carry the state machine.
+  // Amounts are integer strings (lamports / token atoms). CAD columns are derived at the stored FX rate.
+  `
+  CREATE TABLE positions (
+    id TEXT PRIMARY KEY,
+    mode TEXT NOT NULL,
+    mint TEXT NOT NULL,
+    venue TEXT NOT NULL,
+    strategy TEXT NOT NULL,
+    state TEXT NOT NULL,
+    opened_at INTEGER,
+    closed_at INTEGER,
+    updated_at INTEGER NOT NULL,
+    decimals INTEGER NOT NULL,
+    planned_size_lamports TEXT NOT NULL,
+    planned_loss_cad REAL NOT NULL,
+    entry_price REAL,
+    invalidation_price REAL NOT NULL,
+    target_price REAL NOT NULL,
+    time_stop_ms INTEGER NOT NULL,
+    breakout_level REAL,
+    tokens_held TEXT NOT NULL DEFAULT '0',
+    cost_basis_lamports TEXT NOT NULL DEFAULT '0',
+    proceeds_lamports TEXT NOT NULL DEFAULT '0',
+    fees_lamports TEXT NOT NULL DEFAULT '0',
+    rent_locked_lamports TEXT NOT NULL DEFAULT '0',
+    peak_net_lamports TEXT NOT NULL DEFAULT '0',
+    partial_taken INTEGER NOT NULL DEFAULT 0,
+    real_quote_sol_at_entry REAL,
+    sol_cad_at_entry REAL,
+    fx_json TEXT,
+    close_reason TEXT,
+    close_detail TEXT,
+    realized_pnl_lamports TEXT,
+    realized_pnl_cad REAL,
+    software_version TEXT NOT NULL
+  );
+  CREATE INDEX positions_state ON positions (state);
+  CREATE INDEX positions_mint ON positions (mint, opened_at);
+
+  CREATE TABLE orders (
+    id TEXT PRIMARY KEY,
+    position_id TEXT NOT NULL,
+    side TEXT NOT NULL,
+    state TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    resolved_at INTEGER,
+    reason TEXT,
+    quote_in TEXT,
+    quote_out TEXT,
+    quote_impact_pct REAL,
+    quote_route TEXT,
+    quote_at INTEGER,
+    sim_latency_ms INTEGER,
+    requote_out TEXT,
+    fill_in TEXT,
+    fill_out TEXT,
+    slippage_bps INTEGER,
+    base_fee_lamports TEXT,
+    priority_fee_lamports TEXT,
+    rent_lamports TEXT,
+    failure TEXT,
+    signature TEXT
+  );
+  CREATE INDEX orders_position ON orders (position_id);
+
+  CREATE TABLE equity_snapshots (
+    at INTEGER PRIMARY KEY,
+    mode TEXT NOT NULL,
+    cash_lamports TEXT NOT NULL,
+    positions_mark_lamports TEXT NOT NULL,
+    equity_lamports TEXT NOT NULL,
+    sol_cad REAL,
+    equity_cad REAL
+  );
+
+  CREATE TABLE paper_account (
+    mode TEXT PRIMARY KEY,
+    cash_lamports TEXT NOT NULL,
+    starting_lamports TEXT NOT NULL,
+    starting_cad REAL NOT NULL,
+    sol_cad_at_start REAL NOT NULL,
+    started_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function openDb(path: string): DatabaseSync {

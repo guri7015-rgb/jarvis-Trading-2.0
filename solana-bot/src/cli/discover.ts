@@ -4,6 +4,8 @@
  *   npm run discover                 # until Ctrl+C
  *   npm run discover -- --minutes 30 # stop after 30 minutes
  *   npm run discover -- --assess     # also assess candidates (Phase 3, quotes only)
+ *   npm run discover -- --assess --signals --paper
+ *        # Phase 5: approved signals open PAPER positions (real quotes, simulated fills). No wallet, no transactions.
  *   npm run discover -- --assess --signals [--research]
  *        # Phase 4: watch up to 3 tokens' live trades and record strategy/risk decisions (paper only).
  *        # --research also watches tokens rejected only for missing data; they can never be approved.
@@ -18,6 +20,12 @@ import { loadRiskLimits } from "../risk/limits.ts";
 import { RiskStateStore } from "../risk/riskState.ts";
 import { SessionStore } from "../storage/sessions.ts";
 import { SignalEngine } from "../strategy/engine.ts";
+import { Ledger } from "../paper/ledger.ts";
+import { CONSERVATIVE_SIM, PaperExecutor } from "../paper/executor.ts";
+import { PaperTrader } from "../paper/trader.ts";
+import { FxService } from "../market/fx.ts";
+import { QuoteClient } from "../market/quotes.ts";
+import { DEFAULT_POLICY } from "../risk/policy.ts";
 
 const args = process.argv.slice(2);
 const minutesIdx = args.indexOf("--minutes");
@@ -33,6 +41,7 @@ const svc = new DiscoveryService({ ...deps, assessor });
 
 let engine: SignalEngine | undefined;
 let stream: TradeStream | undefined;
+let paperLedger: Ledger | undefined;
 if (args.includes("--signals")) {
   if (!assess) throw new Error("--signals needs --assess (the watchlist comes from gate assessments)");
   const lim = loadRiskLimits(resolve(cfg.DATA_DIR, "risk-limits.json"), resolve(cfg.DATA_DIR, "risk-limits.confirmed"));
@@ -47,7 +56,37 @@ if (args.includes("--signals")) {
     onTrades: (t, evs, at) => engine!.onTrades(t, evs, at),
     onGap: (_t, g) => sessions.addGap({ provider: "solana_ws", from_ms: g.from, to_ms: g.to, reason: g.reason }),
   });
+  // --paper: approved entries become paper positions. Still no wallet and no transactions.
+  let paper: { trader: PaperTrader; ledger: Ledger; fx: FxService } | undefined;
+  if (args.includes("--paper")) {
+    const fx = new FxService(deps.http, () => deps.clock.now(), { maxUsdCadAgeDays: 5, solUsdCacheMs: 60_000, usdCadCacheMs: 6 * 3_600_000, apiKey: cfg.JUPITER_API_KEY });
+    const quotes = new QuoteClient(deps.http, () => deps.clock.now(), cfg.JUPITER_API_KEY);
+    const ledger = new Ledger(deps.db, () => deps.clock.now());
+    const riskState = new RiskStateStore(deps.db, () => deps.clock.now());
+    // Priority fee budget: the policy cap. Measured values replace this in Phase 6.
+    const prio = () => DEFAULT_POLICY.maxPriorityMicroLamports / 10;
+    const executor = new PaperExecutor(quotes, deps.clock, prio, CONSERVATIVE_SIM);
+    const trader = new PaperTrader({
+      ledger,
+      executor,
+      quotes,
+      riskState,
+      clock: deps.clock,
+      logger: deps.logger,
+      priorityMicroLamports: prio,
+      computeUnits: CONSERVATIVE_SIM.computeUnits,
+      slippageBps: DEFAULT_POLICY.quoteSlippageBps,
+      markEveryMs: 10_000,
+      onAlert: (m, c) => deps.logger.error(`ALERT: ${m}`, c),
+    });
+    paper = { trader, ledger, fx };
+    paperLedger = ledger;
+    void fx.solCad().then((q) => ledger.initAccount(lim.limits.referenceEquityCad, q.solCad)).catch((e) => deps.logger.error("paper account not initialised: FX unavailable", { err: (e as Error).message }));
+  }
   engine = new SignalEngine({
+    trader: paper?.trader,
+    ledger: paper?.ledger,
+    fx: paper?.fx,
     db: deps.db,
     registry: new TokenRegistry(deps.db),
     rpc: deps.rpc,
@@ -87,6 +126,12 @@ function printStatus(): void {
   if (s.assess) lines.push(`assess: ${JSON.stringify(s.assess)}`);
   if (engine && stream) {
     lines.push(`signals: ${JSON.stringify(engine.stats)}`);
+    if (paperLedger) {
+      const a = paperLedger.account();
+      const open = paperLedger.open();
+      if (a) lines.push(`paper: cash=${(Number(a.cash) / 1e9).toFixed(4)} SOL (start ${(Number(a.starting) / 1e9).toFixed(4)})  open=${open.length}  closed=${paperLedger.closed().length}`);
+      for (const p of open) lines.push(`  position ${p.id} ${p.state} ${p.strategy} entry=${p.entry_price?.toExponential(3)} held=${p.tokens_held}`);
+    }
     for (const w of engine.watched()) lines.push(`  watching ${w.mint} ${w.venue}${w.researchOnly ? " (research only)" : ""} ${JSON.stringify(stream.stats.get(stream.watched().find((x) => x.mint === w.mint)?.account ?? "") ?? {})}`);
   }
   for (const r of s.recent) lines.push(`  ${r.mint}  ${r.category.padEnd(11)} age=${age(r.ageMs).padEnd(5)} stage=${r.stage.padEnd(8)} ${r.confirm}`);
