@@ -37,7 +37,8 @@ export interface ReconnectingWsOptions {
   provider: ProviderId;
   url: string;
   factory: WsFactory;
-  subscribeMessages: string[];
+  /** Sent after every (re)connect. A function lets the set change at runtime. */
+  subscribeMessages: string[] | (() => string[]);
   maxSilenceMs: number;
   clock: Clock;
   health: HealthMonitor;
@@ -110,7 +111,8 @@ export class ReconnectingWs {
         this.o.onGap?.({ provider: this.o.provider, from: this.downSince, to: this.o.clock.now(), reason: this.downReason });
       }
       this.downSince = undefined;
-      for (const m of this.o.subscribeMessages) ws.send(m);
+      const subs = typeof this.o.subscribeMessages === "function" ? this.o.subscribeMessages() : this.o.subscribeMessages;
+      for (const m of subs) ws.send(m);
       this.armSilence();
       this.o.logger.info("stream connected", { provider: this.o.provider });
     };
@@ -176,6 +178,17 @@ export class ReconnectingWs {
       }
       this.handleDown("silent");
     }, this.o.maxSilenceMs);
+  }
+
+  /** Send on the live socket. Returns false if not connected (the message will go out on reconnect only if it is part of subscribeMessages). */
+  send(text: string): boolean {
+    if (!this.ws || this.ws.readyState !== 1) return false;
+    this.ws.send(text);
+    return true;
+  }
+
+  get connected(): boolean {
+    return !!this.ws && this.ws.readyState === 1;
   }
 
   /** Ms the stream has been down, or 0 if connected. */

@@ -91,7 +91,7 @@ describe("restart and recovery", () => {
     // Simulate a row confirmed by the v1 code: curve mismatch but still CONFIRMED.
     db.exec(`UPDATE tokens SET confirm_status='CONFIRMED', curve_key_matches=0, confirm_note=NULL`);
     // Make it look like a real v2 database: later tables don't exist yet.
-    db.exec("DROP TABLE assessments; UPDATE schema_version SET version = 2");
+    db.exec("DROP TABLE assessments; DROP TABLE trades; DROP TABLE decisions; DROP TABLE risk_state; UPDATE schema_version SET version = 2");
     db.close();
     db = openDb(path);
     const t = new TokenRegistry(db).get(PUMP_MINT)!;

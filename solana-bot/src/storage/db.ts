@@ -176,6 +176,50 @@ const MIGRATIONS: string[] = [
   UPDATE tokens SET confirm_status = 'PENDING', confirm_note = NULL, confirm_attempts = 0
   WHERE confirm_status = 'CONFLICT' AND confirm_note = 'no pump.fun bonding curve at the address derived from this mint';
   `,
+  // 6: Phase 4 trade tape (on-chain events from logs) and strategy/risk decisions.
+  `
+  CREATE TABLE trades (
+    id INTEGER PRIMARY KEY,
+    mint TEXT NOT NULL,
+    venue TEXT NOT NULL,
+    signature TEXT NOT NULL,
+    event_index INTEGER NOT NULL,
+    slot INTEGER NOT NULL,
+    block_time_ms INTEGER NOT NULL,
+    received_at INTEGER NOT NULL,
+    side TEXT NOT NULL,
+    wallet TEXT NOT NULL,
+    quote_amount TEXT NOT NULL,
+    token_amount TEXT NOT NULL,
+    price_sol REAL NOT NULL,
+    real_quote_reserves TEXT,
+    UNIQUE (signature, event_index, mint)
+  );
+  CREATE INDEX trades_mint_time ON trades (mint, block_time_ms);
+
+  CREATE TABLE decisions (
+    id INTEGER PRIMARY KEY,
+    at INTEGER NOT NULL,
+    mint TEXT NOT NULL,
+    strategy TEXT NOT NULL,
+    action TEXT NOT NULL,
+    reasons TEXT NOT NULL,
+    signal_json TEXT,
+    risk_json TEXT,
+    features_json TEXT
+  );
+  CREATE INDEX decisions_at ON decisions (at);
+  CREATE INDEX decisions_mint ON decisions (mint, at);
+
+  CREATE TABLE risk_state (
+    day TEXT PRIMARY KEY,
+    realized_loss_cad REAL NOT NULL DEFAULT 0,
+    entries INTEGER NOT NULL DEFAULT 0,
+    consecutive_losses INTEGER NOT NULL DEFAULT 0,
+    halted_reason TEXT,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function openDb(path: string): DatabaseSync {

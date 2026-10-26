@@ -22,6 +22,7 @@ export type ProviderId =
   | "jupiter_price"
   | "dexscreener"
   | "solana_rpc"
+  | "solana_ws"
   | "bankofcanada";
 
 /**
