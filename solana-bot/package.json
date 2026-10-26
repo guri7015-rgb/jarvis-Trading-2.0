@@ -14,7 +14,8 @@
     "coverage": "tsx src/cli/coverage.ts",
     "probe": "tsx src/cli/probe.ts",
     "costs": "tsx src/cli/costs.ts",
-    "signals": "tsx src/cli/signals.ts"
+    "signals": "tsx src/cli/signals.ts",
+    "replay": "tsx src/cli/replay.ts"
   },
   "dependencies": {
     "@solana/kit": "8.4.0",

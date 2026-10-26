@@ -104,6 +104,10 @@ describe("features", () => {
     expect(computeFeatures("M", lagged, sec(121)).quality.reasons.join(" ")).toMatch(/lag/);
     const good = span(0, 100, 2, () => 1);
     expect(computeFeatures("M", good, sec(101), [{ from: sec(50), to: sec(60) }]).quality.reasons.join(" ")).toMatch(/gap/);
+    // A sub-second reconnect blip warns but doesn't block.
+    const blip = computeFeatures("M", good, sec(101), [{ from: sec(50), to: sec(50) + 800 }]).quality;
+    expect(blip.ok).toBe(true);
+    expect(blip.warnings[0]).toMatch(/blip/);
   });
 
   it("measures participation, imbalance, concentration and repeated sizes", () => {
@@ -187,7 +191,7 @@ describe("risk manager", () => {
     failure: { action: "NONE", reasons: [] },
     feedsHealthy: true,
     feedReasons: [],
-    quality: { ok: true, reasons: [], trades180s: 50, secondsSinceLastTrade: 1, medianLagS: 1, inGap: false },
+    quality: { ok: true, reasons: [], trades180s: 50, secondsSinceLastTrade: 1, medianLagS: 1, inGap: false, warnings: [] },
     assessment: { at: T - 30_000, verdict: "PASS", researchOnly: false, totalCostBps: 300, breakEvenPct: 3.1, sizeCad: 30, solCad: 140 },
     lastPrice: 1.01,
     state: { day: "2026-10-26", realizedLossCad: 0, entries: 0, consecutiveLosses: 0, haltedReason: null },

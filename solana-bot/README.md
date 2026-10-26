@@ -11,7 +11,8 @@ It is separate from the forex/crypto app in the parent folder and shares no code
 | 1. Architecture | Done: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | 2. Discovery, normalization, freshness, provider health | Done: [docs/PHASE2-REPORT.md](docs/PHASE2-REPORT.md) |
 | 3. Safety gate, liquidity, quotes, cost measurement | Done: [docs/PHASE3-REPORT.md](docs/PHASE3-REPORT.md). Holder checks need your Helius key. |
-| 4–9 | Not started. Live trading needs your explicit written approval. |
+| 4. Strategies A–D, risk manager, exit engine | Done: [docs/PHASE4-REPORT.md](docs/PHASE4-REPORT.md), [docs/STRATEGIES.md](docs/STRATEGIES.md). Zero signals on real tapes with placeholder thresholds. |
+| 5–9 | Not started. Live trading needs your explicit written approval. |
 
 ## Quick start
 
@@ -25,6 +26,9 @@ npm run discover -- --minutes 30
 npm run coverage
 npm run discover -- --assess --minutes 30   # also price CAD 30 round trips (quotes only)
 npm run costs
+npm run discover -- --assess --signals --research   # watch live trades, record strategy/risk decisions
+npm run signals                                      # strategy and risk report
+npm run replay                                       # strategies over the recorded tape (counts only)
 ```
 
 ## Layout
@@ -37,11 +41,12 @@ src/solana/      read-only RPC with daily budget, mint, token-account and pump.f
 src/market/      Jupiter quotes (read-only), SOL/CAD from Jupiter + Bank of Canada
 src/risk/        tradability gate, policy (placeholder thresholds), costs, holders, curve fee check
 src/assess/      assessor: picks candidates and runs the gate
+src/strategy/    features, strategies A-D, exit engine, signal engine
 src/providers/   PumpPortal (read-only feeds), GeckoTerminal, Jupiter Tokens, DexScreener
 src/discovery/   token registry (dedupe, merge, ordering), on-chain confirmer
 src/storage/     SQLite schema, sessions and gaps
 src/app/         service wiring
-src/cli/         discover, coverage, probe
+src/cli/         discover, coverage, probe, costs, signals, replay
 test/            unit, integration and failure-injection tests; fixtures are real captured payloads
 docs/            architecture, research, legal/terms, setup, phase reports
 ```

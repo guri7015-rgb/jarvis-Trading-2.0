@@ -32,6 +32,8 @@ export interface DataQuality {
   /** Median arrival delay behind on-chain time (s). On-chain time has 1 s precision. */
   medianLagS: number | null;
   inGap: boolean;
+  /** Short reconnect blips in the window: not blocking, but data may be incomplete. */
+  warnings: string[];
 }
 
 export interface Features {
@@ -85,9 +87,16 @@ export interface QualityRules {
   minTrades180s: number;
   maxSecondsSinceLastTrade: number;
   maxMedianLagS: number;
+  /**
+   * A feed gap at least this long in the last 180 s blocks signals. Shorter
+   * reconnect blips (the public RPC WebSocket drops about every 25 s for ~1 s)
+   * are reported as a warning; the sparse-trades check still catches lost data.
+   * Placeholder.
+   */
+  blockingGapMs: number;
 }
 
-export const DEFAULT_QUALITY: QualityRules = { minTrades180s: 20, maxSecondsSinceLastTrade: 30, maxMedianLagS: 10 };
+export const DEFAULT_QUALITY: QualityRules = { minTrades180s: 20, maxSecondsSinceLastTrade: 30, maxMedianLagS: 10, blockingGapMs: 2_000 };
 
 const median = (a: number[]) => {
   if (!a.length) return null;
@@ -157,11 +166,14 @@ export function computeFeatures(mint: string, all: Trade[], now: number, gaps: {
   const reasons: string[] = [];
   const sinceLast = lastChain === null ? null : (now - lastChain) / 1000;
   const lagS = median(w180.map((t) => (t.receivedAt - t.blockTimeMs) / 1000));
-  const inGap = gaps.some((g) => g.to > now - 180_000 && g.from < now);
+  const recentGaps = gaps.filter((g) => g.to > now - 180_000 && g.from < now);
+  const inGap = recentGaps.some((g) => g.to - g.from >= rules.blockingGapMs);
+  const warnings: string[] = [];
+  if (!inGap && recentGaps.length) warnings.push(`${recentGaps.length} short feed blip(s) in the last 180s`);
   if (w180.length < rules.minTrades180s) reasons.push(`sparse: ${w180.length} trades in 180s < ${rules.minTrades180s}`);
   if (sinceLast === null || sinceLast > rules.maxSecondsSinceLastTrade) reasons.push(`stale: last trade ${sinceLast === null ? "never" : `${sinceLast.toFixed(0)}s ago`}`);
   if (lagS !== null && lagS > rules.maxMedianLagS) reasons.push(`feed lag ${lagS.toFixed(1)}s`);
-  if (inGap) reasons.push("feed gap in the last 180s");
+  if (inGap) reasons.push(`feed gap >= ${rules.blockingGapMs / 1000}s in the last 180s`);
 
   return {
     at: now,
@@ -197,7 +209,7 @@ export function computeFeatures(mint: string, all: Trade[], now: number, gaps: {
     baseLow: lo(base),
     buyers10: buyers(w10).size,
     realQuoteSol: ts.length ? (ts[ts.length - 1]!.realQuoteSol ?? null) : null,
-    quality: { ok: reasons.length === 0, reasons, trades180s: w180.length, secondsSinceLastTrade: sinceLast, medianLagS: lagS, inGap },
+    quality: { ok: reasons.length === 0, reasons, trades180s: w180.length, secondsSinceLastTrade: sinceLast, medianLagS: lagS, inGap, warnings },
   };
 }
 
