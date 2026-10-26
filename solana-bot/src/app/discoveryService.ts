@@ -60,6 +60,8 @@ export function registerProviders(health: HealthMonitor, cfg: AppConfig): void {
   health.register("jupiter_quote", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });
   health.register("jupiter_price", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });
   health.register("bankofcanada", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });
+  // Phase 4 trade feed for the watchlist. Quiet tokens can be silent for minutes.
+  health.register("solana_ws", { kind: "stream", maxSilenceMs: 5 * 60_000, required: false });
 }
 
 export class DiscoveryService {

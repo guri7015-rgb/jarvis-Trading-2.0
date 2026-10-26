@@ -1,0 +1,292 @@
+/**
+ * Signal engine (Phase 4): watchlist → live trades → features → strategies →
+ * risk manager → recorded decision. Paper only: an approved decision is
+ * recorded as PAPER_ELIGIBLE. Nothing here creates a position or a transaction.
+ *
+ * Watchlist admission:
+ *   - a recent gate assessment with verdict PASS, or
+ *   - research mode only: a reject whose ONLY failures are missing data (e.g.
+ *     holder data refused by the RPC). These are watched to measure signals,
+ *     and the risk manager always rejects them at gate 2.
+ */
+import type { DatabaseSync } from "node:sqlite";
+import type { Clock } from "../core/clock.ts";
+import type { Logger } from "../core/log.ts";
+import { categorize, type TokenRegistry } from "../discovery/registry.ts";
+import type { HealthMonitor } from "../health/monitor.ts";
+import type { TradeEvent } from "../market/eventDecoder.ts";
+import type { TradeStream, WatchTarget } from "../market/tradeStream.ts";
+import type { RiskLimits } from "../risk/limits.ts";
+import { decideEntry, type AssessmentView, type RiskDecision } from "../risk/manager.ts";
+import type { RiskStateStore } from "../risk/riskState.ts";
+import { derivePumpBondingCurve } from "../solana/address.ts";
+import { MINTS, PROGRAMS } from "../solana/programs.ts";
+import { decodeBondingCurve } from "../solana/pumpCurve.ts";
+import { decodePumpSwapPool } from "../solana/pumpSwapPool.ts";
+import type { SolanaRpc } from "../solana/rpc.ts";
+import { computeFeatures, type Features, type Trade } from "./features.ts";
+import { strategyA } from "./strategyA.ts";
+import { strategyB } from "./strategyB.ts";
+import { strategyC } from "./strategyC.ts";
+import { strategyD } from "./strategyD.ts";
+import type { Signal } from "./types.ts";
+
+export interface EngineDeps {
+  db: DatabaseSync;
+  registry: TokenRegistry;
+  rpc: SolanaRpc;
+  stream: TradeStream;
+  health: HealthMonitor;
+  clock: Clock;
+  logger: Logger;
+  limits: RiskLimits;
+  limitsRefused: string[];
+  riskState: RiskStateStore;
+  /** Admit tokens rejected only for missing data, for measurement. Never tradable. */
+  research: boolean;
+  newLaunchMaxAgeMs: number;
+  earlyMaxAgeMs: number;
+}
+
+interface Watched {
+  target: WatchTarget;
+  addedAt: number;
+  researchOnly: boolean;
+  decimals: number;
+}
+
+export const MAX_WATCH = 3;
+const WATCH_IDLE_MS = 10 * 60_000;
+const WATCH_MAX_MS = 60 * 60_000;
+const ASSESSMENT_LOOKBACK_MS = 10 * 60_000;
+const SNAPSHOT_EVERY_MS = 30_000;
+
+export class SignalEngine {
+  private watch = new Map<string, Watched>();
+  private cooldown = new Map<string, number>();
+  private lastSnapshot = new Map<string, number>();
+  private timers: unknown[] = [];
+  private running = false;
+  public stats = { ticks: 0, signals: 0, approved: 0, rejected: 0, tradesStored: 0, watchAdds: 0, watchDrops: 0 };
+
+  constructor(private readonly d: EngineDeps) {}
+
+  /** Called by the trade stream. Stores ONCHAIN_CONFIRMED trades (confirmed commitment). */
+  onTrades(target: WatchTarget, events: TradeEvent[], receivedAt: number): void {
+    const w = this.watch.get(target.mint);
+    if (!w) return;
+    const ins = this.d.db.prepare(
+      `INSERT OR IGNORE INTO trades (mint, venue, signature, event_index, slot, block_time_ms, received_at, side, wallet, quote_amount, token_amount, price_sol, real_quote_reserves)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    for (const e of events) {
+      if (e.tokenAmount === 0n) continue;
+      const price = Number(e.quoteAmount) / 1e9 / (Number(e.tokenAmount) / 10 ** w.decimals);
+      const r = ins.run(target.mint, e.venue, e.signature, e.eventIndex, e.slot, e.blockTimeMs, receivedAt, e.side, e.wallet, e.quoteAmount.toString(), e.tokenAmount.toString(), price, e.realQuoteReserves?.toString() ?? null);
+      this.stats.tradesStored += Number(r.changes);
+    }
+  }
+
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    const loop = (fn: () => Promise<void>, every: number) => {
+      const run = async () => {
+        if (!this.running) return;
+        try {
+          await fn();
+        } catch (e) {
+          this.d.logger.warn("engine task failed", { err: (e as Error).message });
+        }
+        if (this.running) this.timers.push(this.d.clock.setTimeout(run, every));
+      };
+      void run();
+    };
+    loop(() => this.refreshWatchlist(), 30_000);
+    loop(async () => {
+      this.tick();
+    }, 5_000);
+  }
+
+  stop(): void {
+    this.running = false;
+    for (const t of this.timers) this.d.clock.clearTimeout(t);
+  }
+
+  watched(): { mint: string; venue: string; researchOnly: boolean; addedAt: number }[] {
+    return [...this.watch.values()].map((w) => ({ mint: w.target.mint, venue: w.target.venue, researchOnly: w.researchOnly, addedAt: w.addedAt }));
+  }
+
+  /** Latest assessment as the risk manager sees it. */
+  private assessment(mint: string): AssessmentView | undefined {
+    const r = this.d.db.prepare("SELECT at, verdict, rejects, total_cost_bps, break_even_pct, size_cad, sol_cad FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1").get(mint) as
+      | { at: number; verdict: "PASS" | "REJECT"; rejects: string; total_cost_bps: number | null; break_even_pct: number | null; size_cad: number; sol_cad: number | null }
+      | undefined;
+    if (!r) return undefined;
+    const rejects = JSON.parse(r.rejects) as { kind: string }[];
+    return {
+      at: r.at,
+      verdict: r.verdict,
+      researchOnly: r.verdict === "REJECT" && rejects.length > 0 && rejects.every((x) => x.kind === "data"),
+      totalCostBps: r.total_cost_bps,
+      breakEvenPct: r.break_even_pct,
+      sizeCad: r.size_cad,
+      solCad: r.sol_cad,
+    };
+  }
+
+  async refreshWatchlist(): Promise<void> {
+    const now = this.d.clock.now();
+    // Drop idle, stale or no-longer-acceptable tokens.
+    for (const [mint, w] of this.watch) {
+      const lastTrade = (this.d.db.prepare("SELECT MAX(received_at) t FROM trades WHERE mint = ?").get(mint) as { t: number | null }).t ?? w.addedAt;
+      const a = this.assessment(mint);
+      const structural = a && a.verdict === "REJECT" && !a.researchOnly && (JSON.parse((this.d.db.prepare("SELECT rejects FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1").get(mint) as { rejects: string }).rejects) as { kind: string }[]).some((x) => x.kind === "structural");
+      if (now - lastTrade > WATCH_IDLE_MS || now - w.addedAt > WATCH_MAX_MS || structural) {
+        this.d.stream.remove(w.target.account);
+        this.watch.delete(mint);
+        this.stats.watchDrops++;
+      }
+    }
+    if (this.watch.size >= MAX_WATCH) return;
+    const rows = this.d.db
+      .prepare("SELECT mint, verdict, rejects FROM assessments WHERE at >= ? ORDER BY at DESC")
+      .all(now - ASSESSMENT_LOOKBACK_MS) as { mint: string; verdict: string; rejects: string }[];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      if (this.watch.size >= MAX_WATCH) break;
+      if (seen.has(r.mint) || this.watch.has(r.mint)) continue;
+      seen.add(r.mint);
+      const rejects = JSON.parse(r.rejects) as { kind: string }[];
+      const researchOnly = r.verdict === "REJECT" && rejects.length > 0 && rejects.every((x) => x.kind === "data");
+      if (r.verdict !== "PASS" && !(this.d.research && researchOnly)) continue;
+      const target = await this.resolveTarget(r.mint);
+      if (!target) continue;
+      const t = this.d.registry.get(r.mint);
+      this.watch.set(r.mint, { target, addedAt: now, researchOnly, decimals: t?.decimals ?? 6 });
+      this.d.stream.add(target);
+      this.stats.watchAdds++;
+      this.d.logger.info("watching", { mint: r.mint, venue: target.venue, researchOnly });
+    }
+  }
+
+  /** Where this token trades now, checked on-chain: its live curve, or its PumpSwap pool. */
+  private async resolveTarget(mint: string): Promise<WatchTarget | undefined> {
+    const t = this.d.registry.get(mint);
+    if (!t) return undefined;
+    const pool = (this.d.db.prepare("SELECT pool FROM pools WHERE mint = ? AND venue = 'pumpswap' ORDER BY first_seen_at DESC LIMIT 1").get(mint) as { pool: string } | undefined)?.pool;
+    const curve = t.launch_venue === "pump_curve" ? await derivePumpBondingCurve(mint) : undefined;
+    const addrs = [curve, pool].filter((x): x is string => !!x);
+    if (!addrs.length) return undefined;
+    const res = await this.d.rpc.getMultipleAccounts(addrs);
+    const ci = curve ? 0 : -1;
+    const pi = pool ? addrs.length - 1 : -1;
+    if (ci >= 0) {
+      const a = res.accounts[ci];
+      if (a && a.owner === PROGRAMS.PUMP_CURVE) {
+        try {
+          const c = decodeBondingCurve(a.data);
+          if (!c.complete && !c.isMayhemMode && c.quoteMint === MINTS.WSOL) return { account: curve!, mint, venue: "pump_curve" };
+        } catch {
+          /* fall through to the pool */
+        }
+      }
+    }
+    if (pi >= 0) {
+      const a = res.accounts[pi];
+      if (a && a.owner === PROGRAMS.PUMPSWAP) {
+        try {
+          const p = decodePumpSwapPool(a.data);
+          if (p.baseMint === mint && p.quoteMint === MINTS.WSOL) return { account: pool!, mint, venue: "pumpswap" };
+        } catch {
+          /* not watchable */
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private loadTrades(mint: string, since: number): Trade[] {
+    const rows = this.d.db
+      .prepare("SELECT signature, event_index, slot, block_time_ms, received_at, side, wallet, quote_amount, price_sol, real_quote_reserves FROM trades WHERE mint = ? AND block_time_ms >= ? ORDER BY slot, event_index")
+      .all(mint, since) as { signature: string; event_index: number; slot: number; block_time_ms: number; received_at: number; side: "buy" | "sell"; wallet: string; quote_amount: string; price_sol: number; real_quote_reserves: string | null }[];
+    return rows.map((r) => ({
+      mint,
+      signature: r.signature,
+      eventIndex: r.event_index,
+      slot: r.slot,
+      blockTimeMs: r.block_time_ms,
+      receivedAt: r.received_at,
+      side: r.side,
+      wallet: r.wallet,
+      quoteSol: Number(r.quote_amount) / 1e9,
+      priceSol: r.price_sol,
+      realQuoteSol: r.real_quote_reserves ? Number(r.real_quote_reserves) / 1e9 : undefined,
+    }));
+  }
+
+  private gaps(since: number): { from: number; to: number }[] {
+    return (this.d.db.prepare("SELECT from_ms, to_ms FROM gaps WHERE to_ms >= ? AND provider IN ('all','solana_ws')").all(since) as { from_ms: number; to_ms: number }[]).map((g) => ({ from: g.from_ms, to: g.to_ms }));
+  }
+
+  /** One pass over the watchlist. Returns the decisions made, for tests. */
+  tick(): { mint: string; signal: Signal; decision: RiskDecision }[] {
+    this.stats.ticks++;
+    const now = this.d.clock.now();
+    const gate = this.d.health.gate();
+    const ws = this.d.health.get("solana_ws");
+    const feedsHealthy = gate.open && ws.status !== "DOWN";
+    const feedReasons = [...gate.reasons, ...(ws.status === "DOWN" ? [`trade feed ${ws.reason}`] : [])];
+    const out: { mint: string; signal: Signal; decision: RiskDecision }[] = [];
+    const state = this.d.riskState.today();
+    for (const [mint, w] of this.watch) {
+      const f = computeFeatures(mint, this.loadTrades(mint, now - 300_000), now, this.gaps(now - 300_000));
+      const t = this.d.registry.get(mint);
+      const cat = t ? categorize(t, now, { newLaunchMaxAgeMs: this.d.newLaunchMaxAgeMs, earlyMaxAgeMs: this.d.earlyMaxAgeMs }) : undefined;
+      // Age only from a creation time that isn't merely an upper bound.
+      const ctx = { tokenAgeMs: cat && cat.category !== "UNKNOWN_AGE" ? cat.ageMs : undefined };
+      const failure = strategyD(f);
+      if (now - (this.lastSnapshot.get(mint) ?? 0) >= SNAPSHOT_EVERY_MS) {
+        this.lastSnapshot.set(mint, now);
+        this.record(now, mint, "SNAPSHOT", "SNAPSHOT", [w.target.venue, w.researchOnly ? "research-only" : "gated", ...f.quality.reasons], undefined, undefined, f);
+      }
+      const signals = [strategyA(f, ctx), strategyB(f, ctx, "retest"), strategyB(f, ctx, "no_retest"), strategyC(f, ctx)];
+      for (const s of signals) {
+        if (s.action !== "ENTER") continue;
+        const key = `${mint}:${s.strategy}`;
+        if ((this.cooldown.get(key) ?? 0) > now) continue;
+        this.cooldown.set(key, now + s.cooldownMs);
+        this.stats.signals++;
+        const decision = decideEntry(
+          {
+            now,
+            signal: s,
+            failure,
+            feedsHealthy,
+            feedReasons,
+            quality: f.quality,
+            assessment: this.assessment(mint),
+            lastPrice: f.last,
+            state,
+            openPositions: 0,
+            pendingOrders: 0,
+            openRiskCad: 0,
+            limitsRefused: this.d.limitsRefused,
+          },
+          this.d.limits,
+        );
+        if (decision.approved) this.stats.approved++;
+        else this.stats.rejected++;
+        this.record(now, mint, s.strategy, decision.approved ? "PAPER_ELIGIBLE" : "REJECT", decision.approved ? s.reasons : [`${decision.firstFailure}: ${decision.steps.find((x) => !x.ok)?.detail ?? ""}`], s, decision, f);
+        out.push({ mint, signal: s, decision });
+      }
+    }
+    return out;
+  }
+
+  private record(at: number, mint: string, strategy: string, action: string, reasons: string[], s?: Signal, d?: RiskDecision, f?: Features): void {
+    this.d.db
+      .prepare("INSERT INTO decisions (at, mint, strategy, action, reasons, signal_json, risk_json, features_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(at, mint, strategy, action, JSON.stringify(reasons), s ? JSON.stringify(s) : null, d ? JSON.stringify(d) : null, f ? JSON.stringify(f) : null);
+  }
+}

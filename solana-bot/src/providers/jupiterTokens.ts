@@ -21,6 +21,8 @@ const Token = z.object({
   tokenProgram: z.string().max(60).optional(),
   liquidity: z.number().finite().nullable().optional(),
   usdPrice: z.number().finite().nullable().optional(),
+  /** Set once a launchpad token has graduated to an AMM pool (seen live for pump.fun → PumpSwap). */
+  graduatedPool: z.string().max(60).nullable().optional(),
   firstPool: z
     .object({
       id: z.string().max(60),
@@ -73,6 +75,23 @@ export function parseJupiterRecent(body: unknown[], receivedAt: number): Jupiter
       liquidityUsd: t.liquidity ?? undefined,
       priceUsd: t.usdPrice ?? undefined,
     });
+    // A pump.fun token's graduated pool is PumpSwap. Other launchpads graduate elsewhere; not mapped.
+    if (t.graduatedPool && isValidAddress(t.graduatedPool) && venueRaw === "pump.fun") {
+      events.push({
+        kind: "pool_observed",
+        provider: "jupiter_tokens",
+        providerEventId: `gradpool:${t.id}`,
+        dedupeKey: `pool:${t.graduatedPool}`,
+        receivedAt,
+        evidence: "PROVIDER_REPORTED",
+        mint: t.id,
+        venue: "pumpswap",
+        venueRaw: "pump.fun:graduatedPool",
+        pool: t.graduatedPool,
+        liquidityUsd: t.liquidity ?? undefined,
+        priceUsd: t.usdPrice ?? undefined,
+      });
+    }
   }
   return { events, rejected };
 }
