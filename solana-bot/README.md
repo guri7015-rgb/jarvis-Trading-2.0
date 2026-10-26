@@ -12,7 +12,8 @@ It is separate from the forex/crypto app in the parent folder and shares no code
 | 2. Discovery, normalization, freshness, provider health | Done: [docs/PHASE2-REPORT.md](docs/PHASE2-REPORT.md) |
 | 3. Safety gate, liquidity, quotes, cost measurement | Done: [docs/PHASE3-REPORT.md](docs/PHASE3-REPORT.md). Holder checks need your Helius key. |
 | 4. Strategies A–D, risk manager, exit engine | Done: [docs/PHASE4-REPORT.md](docs/PHASE4-REPORT.md), [docs/STRATEGIES.md](docs/STRATEGIES.md). Zero signals on real tapes with placeholder thresholds. |
-| 5–9 | Not started. Live trading needs your explicit written approval. |
+| 5. Paper simulator, accounting, backtest, dashboard, tax export | In progress: [docs/PHASE5-REPORT.md](docs/PHASE5-REPORT.md) |
+| 6–9 | Not started. Live trading needs your explicit written approval. |
 
 ## Quick start
 
@@ -29,6 +30,9 @@ npm run costs
 npm run discover -- --assess --signals --research   # watch live trades, record strategy/risk decisions
 npm run signals                                      # strategy and risk report
 npm run replay                                       # strategies over the recorded tape (counts only)
+npm run discover -- --assess --signals --paper --dashboard   # paper trading with the local dashboard at http://127.0.0.1:4777
+npm run backtest                                     # recorded tapes with modelled fills, split train/validation/test
+npm run export                                       # positions.csv and orders.csv for your records
 ```
 
 ## Layout
@@ -42,13 +46,15 @@ src/market/      Jupiter quotes (read-only), SOL/CAD from Jupiter + Bank of Cana
 src/risk/        tradability gate, policy (placeholder thresholds), costs, holders, curve fee check
 src/assess/      assessor: picks candidates and runs the gate
 src/strategy/    features, strategies A-D, exit engine, signal engine
+src/paper/       ledger, paper executor, paper trader, backtester, CSV export
+src/dashboard/   local dashboard (127.0.0.1 only)
 src/providers/   PumpPortal (read-only feeds), GeckoTerminal, Jupiter Tokens, DexScreener
 src/discovery/   token registry (dedupe, merge, ordering), on-chain confirmer
 src/storage/     SQLite schema, sessions and gaps
 src/app/         service wiring
-src/cli/         discover, coverage, probe, costs, signals, replay
+src/cli/         discover, coverage, probe, costs, signals, replay, backtest, export
 test/            unit, integration and failure-injection tests; fixtures are real captured payloads
-docs/            architecture, research, legal/terms, setup, phase reports
+docs/            architecture, research, legal/terms, setup, strategies, testing guide, security, phase reports
 ```
 
 ## Evidence labels
