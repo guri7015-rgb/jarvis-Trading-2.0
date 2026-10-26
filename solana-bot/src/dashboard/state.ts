@@ -1,7 +1,8 @@
 /**
  * Everything the dashboard shows, read from the database and live objects.
  * Pure read: the dashboard can't change any setting or trigger any action
- * except the manual emergency stop, which only HALTS new entries.
+ * except the manual emergency stop (see server.ts), which closes open paper
+ * positions and halts new entries for the day.
  */
 import type { DatabaseSync } from "node:sqlite";
 import { LIVE_TRADING_ENABLED } from "../core/config.ts";
@@ -22,6 +23,11 @@ export interface DashboardDeps {
   watched?: () => { mint: string; venue: string; researchOnly: boolean; addedAt: number }[];
   rpcBudget?: () => { usedToday: number; remaining: number };
   now: () => number;
+}
+
+/** Every mint the page shows, so logos can be looked up for exactly those. */
+export function shownMints(s: ReturnType<typeof dashboardState>): string[] {
+  return [...new Set([...s.tokens.recent, ...s.assessments.recentRejections, ...s.signals, ...s.positions, ...s.watchlist, ...s.events, ...s.passedRecently].map((x) => x.mint))];
 }
 
 export function dashboardState(d: DashboardDeps) {
@@ -110,7 +116,21 @@ export function dashboardState(d: DashboardDeps) {
 
   const events = q<{ at: number; mint: string; strategy: string; action: string; reasons: string }>("SELECT at, mint, strategy, action, reasons FROM decisions WHERE action != 'SNAPSHOT' ORDER BY at DESC LIMIT 20").map((e) => ({ ...e, reasons: JSON.parse(e.reasons) as string[] }));
 
+  const passed = q<{ mint: string; at: number; stage: string | null; total_cost_bps: number | null; liquidity_usd_reported: number | null }>("SELECT mint, MAX(at) at, stage, total_cost_bps, liquidity_usd_reported FROM assessments WHERE verdict='PASS' AND at >= ? GROUP BY mint ORDER BY at DESC LIMIT 12", now - 24 * 3_600_000);
+
+  const watchlist = d.watched?.() ?? [];
+  const shownMints = [...recentTokens, ...rejections, ...eligible, ...open, ...watchlist, ...events, ...passed].map((x) => x.mint);
+  const meta: Record<string, { name: string | null; symbol: string | null; icon: string | null }> = {};
+  const chunk = [...new Set(shownMints)];
+  if (chunk.length) {
+    for (const r of q<{ mint: string; name: string | null; symbol: string | null; icon_url: string | null }>(`SELECT mint, name, symbol, icon_url FROM token_meta WHERE mint IN (${chunk.map(() => "?").join(",")})`, ...chunk)) {
+      meta[r.mint] = { name: r.name, symbol: r.symbol, icon: r.icon_url && r.icon_url.startsWith("https://") ? r.icon_url : null };
+    }
+  }
+
   return {
+    meta,
+    passedRecently: passed,
     now,
     mode: "PAPER",
     liveTradingEnabled: LIVE_TRADING_ENABLED,
@@ -121,7 +141,7 @@ export function dashboardState(d: DashboardDeps) {
     rpcBudget: d.rpcBudget?.(),
     tokens: { total: tokens?.n ?? 0, confirmed: tokens?.confirmed ?? 0, conflicts: tokens?.conflicts ?? 0, recent: recentTokens },
     assessments: { last24h: assessed24h?.n ?? 0, passed24h: assessed24h?.pass ?? 0, ruleCounts: [...ruleCounts].sort((a, b) => b[1] - a[1]), recentRejections: rejections },
-    watchlist: d.watched?.() ?? [],
+    watchlist,
     signals: eligible,
     positions: open,
     pnl: { realizedSol, realizedCad, unrealizedSol, feesSol, closedCount: closed.length, cashSol: account ? Number(account.cash) / 1e9 : null, startingSol: account ? Number(account.starting) / 1e9 : null, startingCad: account?.startingCad ?? null },

@@ -30,6 +30,8 @@ import { DEFAULT_POLICY } from "../risk/policy.ts";
 import { priorityEstimate } from "../risk/costs.ts";
 import { loadStrategyParams } from "../strategy/params.ts";
 import { startDashboard } from "../dashboard/server.ts";
+import { dashboardState, shownMints } from "../dashboard/state.ts";
+import { TokenMetaService } from "../discovery/tokenMeta.ts";
 import type { Server } from "node:http";
 
 const args = process.argv.slice(2);
@@ -162,24 +164,27 @@ function printStatus(): void {
   process.stdout.write(lines.join("\n") + "\n");
 }
 
+let metaTimer: NodeJS.Timeout | undefined;
 if (args.includes("--dashboard")) {
   const pIdx = args.indexOf("--port");
-  dashboard = startDashboard(
-    {
-      db: deps.db,
-      health: deps.health,
-      riskState: new RiskStateStore(deps.db, () => deps.clock.now()),
-      limits: riskLimits.limits,
-      limitsRefused: riskLimits.refused,
-      ledger: paperLedger,
-      marks: () => paperTrader?.marks() ?? new Map(),
-      watched: () => engine?.watched() ?? [],
-      rpcBudget: () => ({ usedToday: deps.budget.usedToday, remaining: deps.budget.remaining }),
-      now: () => deps.clock.now(),
-    },
-    deps.logger,
-    pIdx >= 0 ? Number(args[pIdx + 1]) : 4777,
-  );
+  const dashDeps = {
+    db: deps.db,
+    health: deps.health,
+    riskState: new RiskStateStore(deps.db, () => deps.clock.now()),
+    limits: riskLimits.limits,
+    limitsRefused: riskLimits.refused,
+    ledger: paperLedger,
+    marks: () => paperTrader?.marks() ?? new Map(),
+    watched: () => engine?.watched() ?? [],
+    rpcBudget: () => ({ usedToday: deps.budget.usedToday, remaining: deps.budget.remaining }),
+    now: () => deps.clock.now(),
+  };
+  dashboard = startDashboard(dashDeps, deps.logger, pIdx >= 0 ? Number(args[pIdx + 1]) : 4777);
+  // Names and logos for the tokens on screen: one Jupiter call a minute at most, display only.
+  const metaSvc = new TokenMetaService(new TokenRegistry(deps.db), deps.http, cfg.JUPITER_API_KEY, deps.clock, deps.logger);
+  const refreshMeta = () => void metaSvc.refresh(shownMints(dashboardState(dashDeps)));
+  metaTimer = setInterval(refreshMeta, 60_000);
+  setTimeout(refreshMeta, 15_000);
 }
 deps.logger.info("starting discovery", { rpc: describeRpc(cfg.SOLANA_RPC_URL), jupiterKey: cfg.JUPITER_API_KEY ? "set" : "keyless", dataDir: cfg.DATA_DIR });
 svc.start();
@@ -193,6 +198,7 @@ function shutdown(signal: string): void {
   stopping = true;
   deps.logger.info("stopping", { signal });
   clearInterval(timer);
+  if (metaTimer) clearInterval(metaTimer);
   engine?.stop();
   stream?.stop();
   dashboard?.close();

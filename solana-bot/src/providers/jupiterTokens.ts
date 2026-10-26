@@ -17,6 +17,9 @@ export const JupiterRecentSchema = z.array(z.unknown()).max(500);
 
 const Token = z.object({
   id: z.string().max(60),
+  name: z.string().max(200).nullable().optional(),
+  symbol: z.string().max(64).nullable().optional(),
+  icon: z.string().max(500).nullable().optional(),
   launchpad: z.string().max(60).nullable().optional(),
   tokenProgram: z.string().max(60).optional(),
   liquidity: z.number().finite().nullable().optional(),
@@ -41,6 +44,56 @@ const Token = z.object({
 export interface JupiterParseResult {
   events: PoolObservedEvent[];
   rejected: number;
+}
+
+export interface TokenMeta {
+  mint: string;
+  name?: string;
+  symbol?: string;
+  iconUrl?: string;
+}
+
+/** Only https URLs are kept; the browser loads them with no referrer. Anything else is dropped. */
+export function safeIconUrl(u: string | null | undefined): string | undefined {
+  if (!u || u.length > 500) return undefined;
+  try {
+    const url = new URL(u);
+    return url.protocol === "https:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tokenMeta(t: { id: string; name?: string | null; symbol?: string | null; icon?: string | null }): Omit<TokenMeta, "mint"> {
+  const out: Omit<TokenMeta, "mint"> = {};
+  if (t.name?.trim()) out.name = t.name.trim();
+  if (t.symbol?.trim()) out.symbol = t.symbol.trim();
+  const icon = safeIconUrl(t.icon);
+  if (icon) out.iconUrl = icon;
+  return out;
+}
+
+/** Tokens v2 `/search` answers with the same token shape as `/recent`, for up to 100 mints per call. */
+export function parseJupiterTokenMeta(body: unknown[]): TokenMeta[] {
+  const out: TokenMeta[] = [];
+  for (const item of body) {
+    const p = Token.safeParse(item);
+    if (!p.success || !isValidAddress(p.data.id)) continue;
+    out.push({ mint: p.data.id, ...tokenMeta(p.data) });
+  }
+  return out;
+}
+
+export async function fetchJupiterTokenMeta(http: HttpClient, apiKey: string | undefined, mints: string[]): Promise<TokenMeta[]> {
+  if (!mints.length) return [];
+  const body = await http.request({
+    provider: "jupiter_tokens",
+    url: `https://api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mints.slice(0, 100).join(","))}`,
+    schema: JupiterRecentSchema,
+    headers: apiKey ? { "x-api-key": apiKey } : {},
+    maxRetries: 0,
+  });
+  return parseJupiterTokenMeta(body);
 }
 
 export function parseJupiterRecent(body: unknown[], receivedAt: number): JupiterParseResult {
@@ -71,6 +124,7 @@ export function parseJupiterRecent(body: unknown[], receivedAt: number): Jupiter
       venue: mapVenue("jupiter_tokens", venueRaw),
       venueRaw,
       pool,
+      ...tokenMeta(t),
       poolCreatedAt: Number.isFinite(created) ? created : undefined,
       liquidityUsd: t.liquidity ?? undefined,
       priceUsd: t.usdPrice ?? undefined,
@@ -88,6 +142,7 @@ export function parseJupiterRecent(body: unknown[], receivedAt: number): Jupiter
         venue: "pumpswap",
         venueRaw: "pump.fun:graduatedPool",
         pool: t.graduatedPool,
+        ...tokenMeta(t),
         liquidityUsd: t.liquidity ?? undefined,
         priceUsd: t.usdPrice ?? undefined,
       });

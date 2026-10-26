@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseDexScreenerTokens } from "../src/providers/dexscreener.ts";
 import { GeckoNewPoolsSchema, parseGeckoNewPools } from "../src/providers/geckoterminal.ts";
-import { parseJupiterRecent } from "../src/providers/jupiterTokens.ts";
+import { parseJupiterRecent, parseJupiterTokenMeta } from "../src/providers/jupiterTokens.ts";
 import { buildSubscribeMessages, parsePumpPortalMessage } from "../src/providers/pumpportal.ts";
 import { mapVenue } from "../src/providers/venues.ts";
 import { fixture, fixtureJson, PUMP_CURVE, PUMP_MINT } from "./helpers.ts";
@@ -98,6 +98,18 @@ describe("Jupiter Tokens /recent", () => {
     expect(pump.venue).toBe("pump_curve");
     expect(pump.poolCreatedAt).toBe(Date.parse("2026-10-26T07:00:30Z"));
     expect(r.events.some((e) => e.venueRaw === "met-dbc" && e.venue === "meteora_dbc")).toBe(true);
+    expect(pump.name).toBeTruthy();
+    expect(pump.symbol).toBeTruthy();
+    expect(pump.iconUrl).toMatch(/^https:\/\//);
+  });
+
+  it("search results give display metadata; non-https logos are dropped", () => {
+    const meta = parseJupiterTokenMeta([
+      { id: PUMP_MINT, name: " Coin ", symbol: "C", icon: "https://cdn.example/c.png" },
+      { id: PUMP_MINT, name: "X", icon: "ftp://cdn.example/c.png" },
+      { id: "not-an-address", name: "Y" },
+    ]);
+    expect(meta).toEqual([{ mint: PUMP_MINT, name: "Coin", symbol: "C", iconUrl: "https://cdn.example/c.png" }, { mint: PUMP_MINT, name: "X" }]);
   });
 });
 

@@ -9,6 +9,7 @@
  *   earlier, stage only moves forward, creation time only gets stronger evidence.
  */
 import type { DatabaseSync } from "node:sqlite";
+import { safeIconUrl } from "../providers/jupiterTokens.ts";
 import {
   EVIDENCE_RANK,
   STAGE_ORDER,
@@ -177,9 +178,47 @@ export class TokenRegistry {
           .run(ev.pool, ev.mint, ev.venue, ev.venueRaw, ev.provider, ev.receivedAt, ev.poolCreatedAt ?? null);
       }
 
+      if (ev.kind !== "migrated" && (ev.name || ev.symbol || (ev.kind === "pool_observed" && ev.iconUrl))) {
+        this.setMeta({ mint: ev.mint, name: ev.name, symbol: ev.symbol, iconUrl: ev.kind === "pool_observed" ? ev.iconUrl : undefined }, ev.provider, ev.receivedAt);
+      }
+
       this.db.prepare("UPDATE tokens SET updated_at = ? WHERE mint = ?").run(Math.max(ev.receivedAt, cur.updated_at), ev.mint);
       return { duplicate: false, newToken, crossProviderRepeat: priorSameFact.n > 0 };
     });
+  }
+
+  /**
+   * Display metadata only. Fills blanks and never overwrites a value already
+   * stored; a later provider can only add what is missing.
+   */
+  setMeta(meta: { mint: string; name?: string; symbol?: string; iconUrl?: string }, source: string, at: number): void {
+    this.db
+      .prepare(
+        `INSERT INTO token_meta (mint, name, symbol, icon_url, source, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (mint) DO UPDATE SET
+           name = COALESCE(name, excluded.name),
+           symbol = COALESCE(symbol, excluded.symbol),
+           icon_url = COALESCE(icon_url, excluded.icon_url),
+           updated_at = excluded.updated_at`,
+      )
+      .run(meta.mint, meta.name?.slice(0, 200) ?? null, meta.symbol?.slice(0, 64) ?? null, safeIconUrl(meta.iconUrl) ?? null, source, at);
+  }
+
+  meta(mints: string[]): Map<string, { name: string | null; symbol: string | null; iconUrl: string | null }> {
+    const out = new Map<string, { name: string | null; symbol: string | null; iconUrl: string | null }>();
+    const list = [...new Set(mints)].filter((m) => typeof m === "string" && m.length <= 60);
+    for (let i = 0; i < list.length; i += 200) {
+      const chunk = list.slice(i, i + 200);
+      const rows = this.db.prepare(`SELECT mint, name, symbol, icon_url FROM token_meta WHERE mint IN (${chunk.map(() => "?").join(",")})`).all(...chunk) as { mint: string; name: string | null; symbol: string | null; icon_url: string | null }[];
+      for (const r of rows) out.set(r.mint, { name: r.name, symbol: r.symbol, iconUrl: r.icon_url });
+    }
+    return out;
+  }
+
+  /** Mints among `mints` with no logo yet. The caller decides whether to look them up. */
+  missingIcons(mints: string[]): string[] {
+    const have = this.meta(mints);
+    return [...new Set(mints)].filter((m) => !have.get(m)?.iconUrl);
   }
 
   get(mint: string): TokenRow | undefined {

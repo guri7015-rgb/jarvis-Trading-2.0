@@ -305,6 +305,18 @@ const MIGRATIONS: string[] = [
     started_at INTEGER NOT NULL
   );
   `,
+  // 8: display metadata (name, symbol, logo URL) as reported by a provider. Never
+  // identity, never a gate input: the dashboard shows it next to the mint.
+  `
+  CREATE TABLE token_meta (
+    mint TEXT PRIMARY KEY,
+    name TEXT,
+    symbol TEXT,
+    icon_url TEXT,
+    source TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 export function openDb(path: string): DatabaseSync {

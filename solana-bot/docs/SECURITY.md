@@ -15,7 +15,8 @@ Status as of Phase 5. Items marked **[Phase 9]** apply only once live trading is
 | Rate limits and budgets | Per-provider token buckets under each free tier. A persisted daily RPC budget. 429s honour the provider's reset time. |
 | Risk limits | Loosening any limit needs a separate confirmation file containing the SHA-256 of the limits file. Tightening needs nothing. Unconfirmed loosening blocks all entries. |
 | Daily halts | Persisted in SQLite. A restart cannot clear a halt or a loss limit. |
-| Dashboard | Binds to 127.0.0.1 only. Read-only except the manual halt, which blocks new entries and nothing else. |
+| Dashboard | Binds to 127.0.0.1 only. Read-only except the emergency stop, which closes every open paper position and blocks new entries for the day. The stop needs the page's own per-process token and a matching Origin, so a page on another site cannot trigger it. |
+| Token logos | The page shows names, symbols and logos as reported by Jupiter. Your browser loads each logo from the URL the token's creator published (https only, no referrer). A creator could see your IP in their image server's log. That is the same exposure as opening the token on any explorer. Nothing about a logo feeds a gate or a trade. |
 | Dependencies | Four runtime packages, exact-pinned. `npm audit` clean at the last check. Lockfile committed. |
 | No AI in the loop | No model output can trigger, size or override a trade. Deterministic code only. |
 

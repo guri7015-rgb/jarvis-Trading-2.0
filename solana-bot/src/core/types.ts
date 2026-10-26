@@ -81,6 +81,10 @@ export interface TokenCreatedEvent extends EventHeader {
 export interface PoolObservedEvent extends EventHeader {
   kind: "pool_observed";
   pool: string;
+  /** Display metadata as the provider reports it. Shown on the dashboard, never used as identity. */
+  name?: string;
+  symbol?: string;
+  iconUrl?: string;
   quoteMint?: string;
   /** Pool creation time as reported (ms). */
   poolCreatedAt?: number;

@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { FakeClock } from "../src/core/clock.ts";
 import { silentLogger } from "../src/core/log.ts";
 import { dashboardState } from "../src/dashboard/state.ts";
+import { TokenRegistry } from "../src/discovery/registry.ts";
 import { startDashboard } from "../src/dashboard/server.ts";
 import { HealthMonitor } from "../src/health/monitor.ts";
 import { Ledger } from "../src/paper/ledger.ts";
@@ -50,16 +51,41 @@ describe("dashboard server", () => {
   afterAll(() => server.close());
   const base = () => `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 
-  it("serves the page and the state, binds to localhost, and the halt only blocks entries", async () => {
+  it("serves the page and the state, binds to localhost, and refuses a halt that did not come from the page", async () => {
     if (!server.listening) await new Promise((r) => server.once("listening", r));
     expect((server.address() as { address: string }).address).toBe("127.0.0.1");
     const page = await fetch(`${base()}/`).then((r) => r.text());
     expect(page).toContain("<title>Solana Paper Desk</title>");
-    const state = await fetch(`${base()}/api/state`).then((r) => r.json() as Promise<{ risk: { day: { haltedReason: string | null } } }>);
+    const token = /data-halt-token="([0-9a-f]{32})"/.exec(page)?.[1];
+    expect(token).toBeTruthy();
+    const state = await fetch(`${base()}/api/state`).then((r) => r.json() as Promise<{ risk: { day: { haltedReason: string | null } }; meta: Record<string, unknown> }>);
     expect(state.risk.day.haltedReason).toBeNull();
-    await fetch(`${base()}/api/halt`, { method: "POST" });
+    expect(state.meta).toEqual({});
+
+    // A cross-site form post: wrong origin, no token.
+    const csrf = await fetch(`${base()}/api/halt`, { method: "POST", headers: { origin: "https://evil.example" } });
+    expect(csrf.status).toBe(403);
+    // Right origin, no token.
+    expect((await fetch(`${base()}/api/halt`, { method: "POST", headers: { origin: base() } })).status).toBe(403);
+    expect(d.riskState.today().haltedReason).toBeNull();
+
+    // The page's own request.
+    const ok = await fetch(`${base()}/api/halt`, { method: "POST", headers: { origin: base(), "x-halt-token": token! } });
+    expect(ok.status).toBe(200);
     expect(d.riskState.today().haltedReason).toMatch(/^KILL: manual stop/);
-    expect(d.ledger.open()).toHaveLength(0); // halting closes nothing
     expect((await fetch(`${base()}/api/anything`)).status).toBe(404);
+  });
+
+  it("shows names and logos for tokens on screen, https only", () => {
+    const d2 = deps();
+    const reg = new TokenRegistry(d2.db);
+    reg.ingest({ kind: "token_created", provider: "pumpportal", providerEventId: "c1", dedupeKey: `create:${PUMP_MINT}`, receivedAt: T, evidence: "PROVIDER_REPORTED", mint: PUMP_MINT, venue: "pump_curve", venueRaw: "pump", name: "Test Coin", symbol: "TEST" });
+    reg.setMeta({ mint: PUMP_MINT, iconUrl: "http://insecure.example/x.png" }, "test", T);
+    expect(dashboardState(d2).meta[PUMP_MINT]).toEqual({ name: "Test Coin", symbol: "TEST", icon: null });
+    reg.setMeta({ mint: PUMP_MINT, name: "Other", iconUrl: "https://cdn.example/x.png" }, "test", T);
+    const m = dashboardState(d2).meta[PUMP_MINT]!;
+    expect(m.name).toBe("Test Coin"); // first value wins
+    expect(m.icon).toBe("https://cdn.example/x.png"); // the http URL was never stored, so the https one fills the blank
+    expect(reg.missingIcons([PUMP_MINT, "other"])).toEqual(["other"]);
   });
 });
