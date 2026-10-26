@@ -14,7 +14,15 @@ export type Evidence =
   /** Computed by us from other facts (inherits the weakest input's evidence). */
   | "DERIVED";
 
-export type ProviderId = "pumpportal" | "geckoterminal" | "jupiter_tokens" | "dexscreener" | "solana_rpc";
+export type ProviderId =
+  | "pumpportal"
+  | "geckoterminal"
+  | "jupiter_tokens"
+  | "jupiter_quote"
+  | "jupiter_price"
+  | "dexscreener"
+  | "solana_rpc"
+  | "bankofcanada";
 
 /**
  * Launch venues we intend to research. Anything a provider reports that we

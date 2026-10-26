@@ -87,3 +87,27 @@ export async function fetchJupiterRecent(http: HttpClient, apiKey: string | unde
   });
   return parseJupiterRecent(body, now());
 }
+
+export type JupiterCategory = "toptrending" | "toptraded" | "toporganicscore";
+
+/**
+ * Jupiter's activity lists (e.g. top trending over 5 minutes). Same token shape
+ * as /recent. Used to pick which tokens are worth a full assessment; the list
+ * itself is a provider opinion, not evidence of anything.
+ */
+export async function fetchJupiterCategory(
+  http: HttpClient,
+  apiKey: string | undefined,
+  category: JupiterCategory,
+  interval: "5m" | "1h",
+  now: () => number,
+): Promise<JupiterParseResult> {
+  const body = await http.request({
+    provider: "jupiter_tokens",
+    url: `https://api.jup.ag/tokens/v2/${category}/${interval}?limit=50`,
+    schema: JupiterRecentSchema,
+    headers: apiKey ? { "x-api-key": apiKey } : {},
+    maxRetries: 0,
+  });
+  return parseJupiterRecent(body, now());
+}

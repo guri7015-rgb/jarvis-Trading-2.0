@@ -90,13 +90,14 @@ describe("restart and recovery", () => {
     new TokenRegistry(db).ingest(ev);
     // Simulate a row confirmed by the v1 code: curve mismatch but still CONFIRMED.
     db.exec(`UPDATE tokens SET confirm_status='CONFIRMED', curve_key_matches=0, confirm_note=NULL`);
-    db.exec("UPDATE schema_version SET version = 2");
+    // Make it look like a real v2 database: later tables don't exist yet.
+    db.exec("DROP TABLE assessments; UPDATE schema_version SET version = 2");
     db.close();
     db = openDb(path);
     const t = new TokenRegistry(db).get(PUMP_MINT)!;
     expect(t.confirm_status).toBe("CONFLICT");
     expect(t.created_at).toBeNull();
-    expect((db.prepare("SELECT version FROM schema_version").get() as { version: number }).version).toBe(3);
+    expect((db.prepare("SELECT version FROM schema_version").get() as { version: number }).version).toBeGreaterThanOrEqual(3);
     db.close();
   });
 

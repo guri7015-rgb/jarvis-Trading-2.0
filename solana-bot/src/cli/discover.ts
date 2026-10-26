@@ -3,8 +3,9 @@
  *
  *   npm run discover                 # until Ctrl+C
  *   npm run discover -- --minutes 30 # stop after 30 minutes
+ *   npm run discover -- --assess     # also assess candidates (Phase 3, quotes only)
  */
-import { buildDeps } from "../app/wire.ts";
+import { buildAssessor, buildDeps } from "../app/wire.ts";
 import { DiscoveryService } from "../app/discoveryService.ts";
 import { describeRpc, LIVE_TRADING_ENABLED, loadConfig } from "../core/config.ts";
 
@@ -15,7 +16,10 @@ const statusEveryMs = 15_000;
 
 const cfg = loadConfig();
 const deps = buildDeps(cfg);
-const svc = new DiscoveryService(deps);
+// --assess: also run the Phase 3 tradability assessor (read-only quotes).
+const assess = args.includes("--assess");
+const assessor = assess ? buildAssessor(deps) : undefined;
+const svc = new DiscoveryService({ ...deps, assessor });
 
 function age(ms?: number): string {
   if (ms === undefined) return "?";
@@ -37,6 +41,7 @@ function printStatus(): void {
   lines.push(`tokens=${s.tokens}  new by source=${JSON.stringify(s.counters.newTokens)}  dupes=${JSON.stringify(s.counters.duplicates)}`);
   lines.push(`confirm: ${JSON.stringify(s.confirm)}  rpc budget used today=${s.rpcBudget.usedToday} left=${s.rpcBudget.remaining}  slot=${s.lastSlot ?? "?"}`);
   lines.push(`stream: ${JSON.stringify(s.stream)}`);
+  if (s.assess) lines.push(`assess: ${JSON.stringify(s.assess)}`);
   for (const r of s.recent) lines.push(`  ${r.mint}  ${r.category.padEnd(11)} age=${age(r.ageMs).padEnd(5)} stage=${r.stage.padEnd(8)} ${r.confirm}`);
   process.stdout.write(lines.join("\n") + "\n");
 }

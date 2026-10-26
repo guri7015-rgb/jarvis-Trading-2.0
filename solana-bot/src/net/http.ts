@@ -33,6 +33,19 @@ export class HttpError extends Error {
 
 export class SchemaError extends Error {}
 
+/**
+ * A 4xx the provider uses for a normal answer (e.g. Jupiter's 400 "no route").
+ * The provider is healthy; the answer is just "no". Carries the parsed JSON body.
+ */
+export class ExpectedHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: unknown,
+  ) {
+    super(`HTTP ${status}`);
+  }
+}
+
 export interface RequestOptions<S extends z.ZodType> {
   provider: ProviderId;
   url: string;
@@ -43,6 +56,8 @@ export interface RequestOptions<S extends z.ZodType> {
   cacheTtlMs?: number;
   timeoutMs?: number;
   maxRetries?: number;
+  /** 4xx statuses that are normal answers, not provider failures. */
+  expectedErrorStatuses?: number[];
 }
 
 export interface HttpClientOptions {
@@ -100,6 +115,7 @@ export class HttpClient {
         return value;
       } catch (e) {
         lastErr = e;
+        if (e instanceof ExpectedHttpError) throw e;
         const retryable = e instanceof HttpError ? e.retryable : !(e instanceof SchemaError);
         if (!retryable || attempt === maxRetries) break;
         await this.o.clock.sleep(backoffDelay(attempt, { baseMs: 500, maxMs: 8_000, random: this.o.random }));
@@ -143,6 +159,16 @@ export class HttpClient {
       if (res.status >= 500) {
         this.o.health.recordFailure(provider, `HTTP ${res.status}`);
         throw new HttpError(`HTTP ${res.status}`, res.status, true);
+      }
+      if (res.status >= 400 && opts.expectedErrorStatuses?.includes(res.status)) {
+        let body: unknown;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          body = undefined;
+        }
+        this.o.health.recordSuccess(provider);
+        throw new ExpectedHttpError(res.status, body);
       }
       if (res.status >= 400) {
         this.o.health.recordFailure(provider, `HTTP ${res.status}`);

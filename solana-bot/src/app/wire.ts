@@ -17,6 +17,11 @@ import { CallBudget, SolanaRpc } from "../solana/rpc.ts";
 import { openDb } from "../storage/db.ts";
 import { budgetStore } from "../storage/sessions.ts";
 import { registerProviders, type ServiceDeps } from "./discoveryService.ts";
+import { Assessor } from "../assess/assessor.ts";
+import { TokenRegistry } from "../discovery/registry.ts";
+import { FxService } from "../market/fx.ts";
+import { QuoteClient } from "../market/quotes.ts";
+import { DEFAULT_POLICY, type RiskPolicy } from "../risk/policy.ts";
 
 function dispatcher(): Dispatcher | undefined {
   const env = process.env;
@@ -38,11 +43,17 @@ export function buildDeps(cfg: AppConfig): ServiceDeps {
   registerProviders(health, cfg);
 
   // Limits sit below each provider's documented free tier.
+  // Jupiter limits are per account, so every Jupiter endpoint shares one bucket.
+  // Keyless 0.5 req/s, free key 1 req/s; we stay at half of that. Burst 3 lets a
+  // buy and sell quote go out back to back so they describe the same market.
+  const jupiter = new RateLimiter(3, cfg.JUPITER_API_KEY ? 0.5 : 0.25, clock);
   const limiters = {
     // Documented ~30/min keyless; we observed 429s sooner, so stay well under.
     geckoterminal: new RateLimiter(2, 10 / 60, clock),
-    // Keyless 0.5 req/s, free key 1 req/s. Shared with future quote calls.
-    jupiter_tokens: new RateLimiter(1, cfg.JUPITER_API_KEY ? 0.5 : 0.25, clock),
+    jupiter_tokens: jupiter,
+    jupiter_quote: jupiter,
+    jupiter_price: jupiter,
+    bankofcanada: new RateLimiter(1, 0.5, clock),
     // 300/min documented.
     dexscreener: new RateLimiter(5, 2, clock),
     // Public RPC: 40 req/10s per method. Helius free: 10 req/s.
@@ -55,4 +66,19 @@ export function buildDeps(cfg: AppConfig): ServiceDeps {
   const rpc = new SolanaRpc(http, cfg.SOLANA_RPC_URL, budget);
 
   return { cfg, clock, logger, db, http, health, rpc, budget, wsFactory };
+}
+
+/** Phase 3 assessor on top of the discovery deps. Read-only: quotes, never transactions. */
+export function buildAssessor(d: ServiceDeps, policy: RiskPolicy = DEFAULT_POLICY): Assessor {
+  return new Assessor({
+    db: d.db,
+    registry: new TokenRegistry(d.db),
+    rpc: d.rpc,
+    budget: d.budget,
+    quotes: new QuoteClient(d.http, () => d.clock.now(), d.cfg.JUPITER_API_KEY),
+    fx: new FxService(d.http, () => d.clock.now(), { maxUsdCadAgeDays: 5, solUsdCacheMs: 60_000, usdCadCacheMs: 6 * 3_600_000, apiKey: d.cfg.JUPITER_API_KEY }),
+    clock: d.clock,
+    logger: d.logger,
+    policy,
+  });
 }

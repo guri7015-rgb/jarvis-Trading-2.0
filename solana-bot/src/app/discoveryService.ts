@@ -14,7 +14,8 @@ import { HealthMonitor } from "../health/monitor.ts";
 import type { HttpClient } from "../net/http.ts";
 import { ReconnectingWs, type WsFactory } from "../net/wsClient.ts";
 import { fetchGeckoNewPools } from "../providers/geckoterminal.ts";
-import { fetchJupiterRecent } from "../providers/jupiterTokens.ts";
+import { fetchJupiterCategory, fetchJupiterRecent, type JupiterCategory } from "../providers/jupiterTokens.ts";
+import type { Assessor } from "../assess/assessor.ts";
 import { Poller } from "../providers/poller.ts";
 import { buildSubscribeMessages, parsePumpPortalMessage, PUMPPORTAL_DATA_URL } from "../providers/pumpportal.ts";
 import type { CallBudget, SolanaRpc } from "../solana/rpc.ts";
@@ -30,6 +31,9 @@ export interface ServiceDeps {
   rpc: SolanaRpc;
   budget: CallBudget;
   wsFactory: WsFactory;
+  /** Phase 3: when present, candidates are assessed on a timer. */
+  assessor?: Assessor;
+  assessIntervalMs?: number;
 }
 
 export interface Counters {
@@ -41,6 +45,7 @@ export interface Counters {
 }
 
 const RPC_HEALTH_INTERVAL_MS = 60_000;
+const CATEGORY_POLL_MS = 60_000;
 const HEARTBEAT_MS = 10_000;
 
 /** Register providers with the health monitor using the configured freshness limits. */
@@ -51,6 +56,10 @@ export function registerProviders(health: HealthMonitor, cfg: AppConfig): void {
   health.register("jupiter_tokens", { kind: "poll", maxSilenceMs: d.jupiterRecentPollMs * d.pollMaxAgeFactor, required: false });
   health.register("solana_rpc", { kind: "rpc", maxSilenceMs: RPC_HEALTH_INTERVAL_MS * 3, required: true });
   health.register("dexscreener", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });
+  // Called on demand by the assessor, so long silences are normal.
+  health.register("jupiter_quote", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });
+  health.register("jupiter_price", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });
+  health.register("bankofcanada", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });
 }
 
 export class DiscoveryService {
@@ -96,6 +105,14 @@ export class DiscoveryService {
     if (r.crossProviderRepeat) this.bump(this.counters.crossProviderRepeats, ev.provider);
   }
 
+  /** Hand polled tokens to the assessor as candidates (it filters by liquidity). */
+  private offer(events: DiscoveryEvent[], source: string): void {
+    if (!this.d.assessor) return;
+    this.d.assessor.addCandidates(
+      events.filter((e) => e.kind === "pool_observed").map((e) => ({ mint: e.mint, source, liquidityUsd: e.kind === "pool_observed" ? e.liquidityUsd : undefined })),
+    );
+  }
+
   private reject(provider: ProviderId, n: number): void {
     if (n <= 0) return;
     this.bump(this.counters.rejected, provider, n);
@@ -130,6 +147,7 @@ export class DiscoveryService {
           const r = await fetchGeckoNewPools(http, () => clock.now());
           this.reject("geckoterminal", r.rejected);
           for (const ev of r.events) this.ingest(ev);
+          this.offer(r.events, "geckoterminal:new_pools");
         },
         clock,
         logger,
@@ -141,6 +159,7 @@ export class DiscoveryService {
           const r = await fetchJupiterRecent(http, cfg.JUPITER_API_KEY, () => clock.now());
           this.reject("jupiter_tokens", r.rejected);
           for (const ev of r.events) this.ingest(ev);
+          this.offer(r.events, "jupiter:recent");
         },
         clock,
         logger,
@@ -148,6 +167,26 @@ export class DiscoveryService {
       new Poller("solana_rpc", cfg.discovery.confirmIntervalMs, () => this.confirmer.runBatch().then(() => undefined), clock, logger),
       new Poller("solana_rpc", RPC_HEALTH_INTERVAL_MS, () => this.checkSlot(), clock, logger),
     );
+    if (this.d.assessor) {
+      const cats: JupiterCategory[] = ["toptrending", "toptraded"];
+      let n = 0;
+      this.pollers.push(
+        new Poller(
+          "jupiter_tokens",
+          CATEGORY_POLL_MS,
+          async () => {
+            const cat = cats[n++ % cats.length]!;
+            const r = await fetchJupiterCategory(http, cfg.JUPITER_API_KEY, cat, "5m", () => clock.now());
+            this.reject("jupiter_tokens", r.rejected);
+            for (const ev of r.events) this.ingest(ev);
+            this.offer(r.events, `jupiter:${cat}`);
+          },
+          clock,
+          logger,
+        ),
+        new Poller("jupiter_quote", this.d.assessIntervalMs ?? 30_000, () => this.d.assessor!.tick().then(() => undefined), clock, logger),
+      );
+    }
     for (const p of this.pollers) p.start();
     const beat = () => {
       if (!this.running) return;
@@ -188,6 +227,7 @@ export class DiscoveryService {
       counters: this.counters,
       tokens: this.registry.count(),
       confirm: this.confirmer.stats,
+      assess: this.d.assessor ? { ...this.d.assessor.stats, candidates: this.d.assessor.candidateCount } : undefined,
       rpcBudget: { usedToday: this.d.budget.usedToday, remaining: this.d.budget.remaining },
       stream: this.stream.stats,
       lastSlot: this.lastSlot?.slot,

@@ -126,6 +126,50 @@ const MIGRATIONS: string[] = [
   WHERE confirm_status = 'CONFIRMED'
     AND (curve_key_matches = 0 OR (launch_venue = 'pump_curve' AND curve_virtual_quote IS NULL));
   `,
+  // 4: Phase 3 tradability assessments. Amounts are integer strings (lamports / token atoms).
+  `
+  CREATE TABLE assessments (
+    id INTEGER PRIMARY KEY,
+    mint TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    verdict TEXT NOT NULL,
+    rejects TEXT NOT NULL,
+    flags TEXT NOT NULL,
+    recheck_after INTEGER NOT NULL,
+    candidate_source TEXT,
+    liquidity_usd_reported REAL,
+    stage TEXT,
+    mint_program TEXT,
+    size_cad REAL,
+    sol_cad REAL,
+    fx_json TEXT,
+    size_lamports TEXT,
+    buy_out TEXT,
+    sell_out TEXT,
+    buy_impact_pct REAL,
+    sell_impact_pct REAL,
+    buy_route TEXT,
+    sell_route TEXT,
+    quote_gap_ms INTEGER,
+    quote_round_trip_bps INTEGER,
+    network_fee_lamports TEXT,
+    rent_lamports TEXT,
+    total_cost_bps INTEGER,
+    break_even_pct REAL,
+    priority_micro_lamports INTEGER,
+    implied_buy_fee_bps INTEGER,
+    implied_sell_fee_bps INTEGER,
+    top10_wallet_pct REAL,
+    largest_wallet_pct REAL,
+    creator_pct REAL,
+    pool_pct REAL,
+    holders_slot INTEGER,
+    accounts_slot INTEGER,
+    duration_ms INTEGER
+  );
+  CREATE INDEX assessments_mint ON assessments (mint, at);
+  CREATE INDEX assessments_at ON assessments (at);
+  `,
 ];
 
 export function openDb(path: string): DatabaseSync {

@@ -122,6 +122,32 @@ export class SolanaRpc {
     return this.call("getSlot", [{ commitment: "confirmed" }], z.number().int().nonnegative());
   }
 
+  /** The 20 largest token accounts for a mint (standard RPC method). */
+  async getTokenLargestAccounts(mint: string): Promise<{ slot: number; accounts: { address: string; amount: bigint }[] }> {
+    const r = await this.call(
+      "getTokenLargestAccounts",
+      [mint, { commitment: "confirmed" }],
+      z.object({
+        context: z.object({ slot: z.number().int().nonnegative() }),
+        value: z.array(z.object({ address: z.string().min(32).max(44), amount: z.string().regex(/^\d{1,20}$/) })).max(20),
+      }),
+    );
+    return { slot: r.context.slot, accounts: r.value.map((a) => ({ address: a.address, amount: BigInt(a.amount) })) };
+  }
+
+  /**
+   * Recent prioritization fees (micro-lamports per CU) seen by the node. A market estimate, not a quote.
+   * With `writableAccounts`, only transactions that locked those accounts count (e.g. the pool we'd trade on).
+   */
+  async getRecentPrioritizationFees(writableAccounts: string[] = []): Promise<number[]> {
+    const r = await this.call(
+      "getRecentPrioritizationFees",
+      writableAccounts.length ? [writableAccounts.slice(0, 128)] : [],
+      z.array(z.object({ slot: z.number().int(), prioritizationFee: z.number().int().nonnegative() })).max(500),
+    );
+    return r.map((x) => x.prioritizationFee);
+  }
+
   /** Up to 100 accounts in one call. Returns the slot the snapshot was read at. */
   async getMultipleAccounts(addresses: string[]): Promise<{ slot: number; accounts: (RawAccount | null)[] }> {
     if (addresses.length === 0) return { slot: 0, accounts: [] };

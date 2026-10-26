@@ -12,7 +12,8 @@
     "test": "vitest run",
     "discover": "tsx src/cli/discover.ts",
     "coverage": "tsx src/cli/coverage.ts",
-    "probe": "tsx src/cli/probe.ts"
+    "probe": "tsx src/cli/probe.ts",
+    "costs": "tsx src/cli/costs.ts"
   },
   "dependencies": {
     "@solana/kit": "8.4.0",
