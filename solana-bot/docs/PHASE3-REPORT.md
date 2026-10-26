@@ -79,6 +79,11 @@ This is what buying CAD 30 and immediately selling it back would have cost, from
   - `MAYHEM_MODE_CURVE`
   - `CURVE_REAL_SOL_THIN`: real SOL must be at least 5× the position (placeholder).
 
+**Follow-up 15-minute run with both rules on (28 assessments):**
+- `CURVE_REAL_SOL_THIN` fired 7 times and `MAYHEM_MODE_CURVE` 3 times.
+- 3 tokens still had no sell route. All 3 were also caught by the new rules.
+- No curve decode failures. The 49-byte fix held.
+
 ### Why tokens were rejected (80 assessments; a token can fail several rules)
 
 | Rule | Count | Note |
