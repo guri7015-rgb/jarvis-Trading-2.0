@@ -89,6 +89,7 @@ export function testConfig(over: Partial<AppConfig["discovery"]> = {}): AppConfi
   return {
     SOLANA_RPC_URL: "https://rpc.invalid",
     SOLANA_WS_URL: "wss://rpc.invalid",
+    SOLANA_FIREHOSE_WS_URL: "wss://rpc.invalid",
     JUPITER_API_KEY: undefined,
     RPC_DAILY_CALL_BUDGET: 1000,
     DATA_DIR: ":memory:",
