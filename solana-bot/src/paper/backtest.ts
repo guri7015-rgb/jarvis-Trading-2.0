@@ -14,7 +14,7 @@ import type { RiskLimits } from "../risk/limits.ts";
 import { decideEntry, type AssessmentView } from "../risk/manager.ts";
 import type { DayState } from "../risk/riskState.ts";
 import { DEFAULT_EXIT_POLICY, decideExit, type ExitPolicy } from "../strategy/exits.ts";
-import { computeFeatures, visible, type Trade } from "../strategy/features.ts";
+import { computeFeatures, DEFAULT_QUALITY, visible, type QualityRules, type Trade } from "../strategy/features.ts";
 import { strategyA } from "../strategy/strategyA.ts";
 import { strategyB } from "../strategy/strategyB.ts";
 import { strategyC } from "../strategy/strategyC.ts";
@@ -86,6 +86,8 @@ export interface BacktestOptions {
   /** Token age for C, if known. */
   tokenAgeMs?: number;
   strategies?: StrategyId[];
+  /** Data-quality rules (defaults, or the explore set). */
+  quality?: QualityRules;
 }
 
 export interface BacktestResult {
@@ -94,6 +96,8 @@ export interface BacktestResult {
   steps: number;
   signals: number;
   rejectedByGate: Record<string, number>;
+  /** First 50 rejections with the failing gate's detail, for research. */
+  rejections: { at: number; strategy: string; gate: string; detail: string }[];
 }
 
 const rnd = (r: () => number, [a, b]: [number, number]) => a + (b - a) * r();
@@ -110,6 +114,7 @@ export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tap
   const sorted = [...tape].sort((a, b) => a.blockTimeMs - b.blockTimeMs);
   const trades: BacktestTrade[] = [];
   const rejected: Record<string, number> = {};
+  const rejections: BacktestResult["rejections"] = [];
   let signals = 0;
   let steps = 0;
   let cooldown = new Map<string, number>();
@@ -125,7 +130,7 @@ export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tap
   for (let now = start; now <= end; now += o.stepMs) {
     steps++;
     const vis = visible(sorted, now).filter((t) => t.blockTimeMs >= now - 300_000);
-    const f = computeFeatures(mint, vis, now, gaps);
+    const f = computeFeatures(mint, vis, now, gaps, o.quality ?? DEFAULT_QUALITY);
     // Manage an open position first (exits don't depend on entry gates).
     if (open) {
       const held = open.tokens;
@@ -203,6 +208,7 @@ export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tap
       if (!dec.approved) {
         const k = dec.firstFailure ?? "?";
         rejected[k] = (rejected[k] ?? 0) + 1;
+        if (rejections.length < 50) rejections.push({ at: now, strategy: s.strategy, gate: k, detail: dec.steps.find((x) => !x.ok)?.detail ?? "" });
         continue;
       }
       const lat = rnd(o.random, cm.latencyMs);
@@ -231,7 +237,7 @@ export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tap
     const pnl = proceeds - open.costBasis - open.fees;
     trades.push({ mint, strategy: open.sig.strategy, entryAt: open.entryAt, exitAt: null, entryPrice: open.entryPrice, exitPrice: null, sizeSol, costBasisSol: open.costBasis + open.fees, proceedsSol: proceeds, pnlSol: pnl, pnlPct: pnl / (open.costBasis + open.fees), grossChartPct: last / open.entryPrice - 1, reason: open.stuck ? "STUCK_AT_END" : "OPEN_AT_END", holdMs: end - open.entryAt, failedEntry: false, stuck: open.stuck });
   }
-  return { label: "MODELLED", trades, steps, signals, rejectedByGate: rejected };
+  return { label: "MODELLED", trades, steps, signals, rejectedByGate: rejected, rejections };
 }
 
 export interface Stats {

@@ -162,14 +162,17 @@ export class SignalEngine {
       }
     }
     if (this.watch.size >= MAX_WATCH) return;
+    // Newest assessment per token in the lookback, cheapest round trip first. The cost
+    // bar is the whole game: a 0.5% trip needs a far smaller move to pay than a 4% one.
     const rows = this.d.db
-      .prepare("SELECT mint, verdict, rejects FROM assessments WHERE at >= ? ORDER BY at DESC")
-      .all(now - ASSESSMENT_LOOKBACK_MS) as { mint: string; verdict: string; rejects: string }[];
+      .prepare("SELECT mint, verdict, rejects, total_cost_bps FROM assessments WHERE at >= ? ORDER BY at DESC")
+      .all(now - ASSESSMENT_LOOKBACK_MS) as { mint: string; verdict: string; rejects: string; total_cost_bps: number | null }[];
     const seen = new Set<string>();
-    for (const r of rows) {
+    const latest = rows.filter((r) => (seen.has(r.mint) ? false : (seen.add(r.mint), true)));
+    latest.sort((a, b) => (a.total_cost_bps ?? 1e9) - (b.total_cost_bps ?? 1e9));
+    for (const r of latest) {
       if (this.watch.size >= MAX_WATCH) break;
-      if (seen.has(r.mint) || this.watch.has(r.mint)) continue;
-      seen.add(r.mint);
+      if (this.watch.has(r.mint)) continue;
       const rejects = JSON.parse(r.rejects) as { kind: string }[];
       const researchOnly = r.verdict === "REJECT" && rejects.length > 0 && rejects.every((x) => x.kind === "data");
       if (r.verdict !== "PASS" && !(this.d.research && researchOnly)) continue;
