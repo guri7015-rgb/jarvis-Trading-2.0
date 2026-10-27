@@ -463,9 +463,10 @@ export class SignalEngine {
       const P = this.d.params ?? DEFAULT_PARAMS;
       const failure = strategyD(f, {}, P.D);
       // A failure signal on a watched coin is a SELL card for anyone holding it, whether or not we do. Once a minute per coin.
-      if (failure.action !== "NONE" && !failure.reasons[0]?.startsWith("data:") && now - (this.lastSellCard.get(mint) ?? 0) >= 60_000) {
+      const sellReasons = failure.reasons.filter((r) => !r.startsWith("data:"));
+      if (failure.action !== "NONE" && sellReasons.length && now - (this.lastSellCard.get(mint) ?? 0) >= 60_000) {
         this.lastSellCard.set(mint, now);
-        this.record(now, mint, "D_failure", "SELL", failure.reasons, undefined, undefined, f);
+        this.record(now, mint, "D_failure", "SELL", sellReasons, undefined, undefined, f);
       }
       if (now - (this.lastSnapshot.get(mint) ?? 0) >= SNAPSHOT_EVERY_MS) {
         this.lastSnapshot.set(mint, now);
