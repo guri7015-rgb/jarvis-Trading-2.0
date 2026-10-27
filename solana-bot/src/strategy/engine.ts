@@ -29,6 +29,7 @@ import { strategyA } from "./strategyA.ts";
 import { strategyB } from "./strategyB.ts";
 import { strategyC } from "./strategyC.ts";
 import { strategyD } from "./strategyD.ts";
+import { strategyE } from "./strategyE.ts";
 import type { Signal } from "./types.ts";
 import type { PaperTrader } from "../paper/trader.ts";
 import { DEFAULT_PARAMS, DRILL_QUALITY, type StrategyParams } from "./params.ts";
@@ -366,6 +367,7 @@ export class SignalEngine {
   }
 
   private lastDrillAt = 0;
+  private lastSellCard = new Map<string, number>();
   private lastDrillSkipAt = 0;
 
   /**
@@ -460,11 +462,16 @@ export class SignalEngine {
       const ctx = { tokenAgeMs: cat && cat.category !== "UNKNOWN_AGE" ? cat.ageMs : undefined };
       const P = this.d.params ?? DEFAULT_PARAMS;
       const failure = strategyD(f, {}, P.D);
+      // A failure signal on a watched coin is a SELL card for anyone holding it, whether or not we do. Once a minute per coin.
+      if (failure.action !== "NONE" && !failure.reasons[0]?.startsWith("data:") && now - (this.lastSellCard.get(mint) ?? 0) >= 60_000) {
+        this.lastSellCard.set(mint, now);
+        this.record(now, mint, "D_failure", "SELL", failure.reasons, undefined, undefined, f);
+      }
       if (now - (this.lastSnapshot.get(mint) ?? 0) >= SNAPSHOT_EVERY_MS) {
         this.lastSnapshot.set(mint, now);
         this.record(now, mint, "SNAPSHOT", "SNAPSHOT", [w.target.venue, w.researchOnly ? "research-only" : "gated", ...f.quality.reasons], undefined, undefined, f);
       }
-      const signals = [strategyA(f, ctx, P.A), strategyB(f, ctx, "retest", P.B), strategyB(f, ctx, "no_retest", P.B), strategyC(f, ctx, P.C)];
+      const signals = [strategyA(f, ctx, P.A), strategyB(f, ctx, "retest", P.B), strategyB(f, ctx, "no_retest", P.B), strategyC(f, ctx, P.C), strategyE(f, ctx, P.E)];
       for (const s of signals) {
         if (s.action !== "ENTER") continue;
         const key = `${mint}:${s.strategy}`;

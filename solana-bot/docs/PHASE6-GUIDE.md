@@ -62,6 +62,18 @@ A dark screen meant to stay open. Runs whenever `--signals` and `--dashboard` ar
 - Tags on every card: FRESH, REWARD x× RISK, TRIP COSTS n%, N MIN MAX, VOLUME x×, STOP n%. `--no-majors` turns the big-coin desk off.
 - **Scorecard.** Every valid setup gets its USD price stamped when it appears and again at 1, 5, 30 minutes and 4 hours. "Beat cost" is the share whose move exceeded the signal's own round-trip estimate. Until that number is high over hundreds of signals, nothing here is an edge.
 
+## The board: http://127.0.0.1:4777/board
+
+A coin moves left to right. The whole trip can take five minutes.
+
+1. **LAUNCHED.** Born in the last 3 minutes, newest on top, with buyers per minute from the scanner.
+2. **QUICK TEST PASSED.** The assessor's quick pass: mint and freeze revoked, not a mayhem curve, sells back, real SOL in it, trip cost known. No holder read, so it takes seconds. The full check with holders is queued right behind it; a quick-only coin is watched but cannot be entered until the full check passes.
+3. **BUY EARLY.** Strategy C fired: brand new, buyers piling in, not run away yet.
+4. **DIP HUNT.** Strategy E fired: it ran at least 15%, pulled back 20 to 60% of the run, bounced 2 to 10% off the low, with 3+ buyers in 10 s, 4+ new wallets in 30 s and buying outweighing selling. "Buyers back" is distinct wallets on chain, not chatter.
+5. **SELL.** Strategy D fired on a watched coin: dump, broad selling, failed breakout, liquidity leaving. Shown whether or not we hold it.
+
+The line at the top is the one thing to do right now: the newest BUY that cleared every gate in the last 3 minutes, else the newest SELL, else nothing. Every card carries the live price and whether it is still in the entry zone, gone above it, stopped out or at target.
+
 ## Drill mode: a forced paper trade every 5 minutes
 
 For exercising fills and exits only. No strategy. Every 5 minutes, if nothing is open, the bot buys a paper position in the watched coin with the cheapest fresh PASS, with a fixed plan: stop 5% below, target 8% above, 10-minute time stop, the normal D veto and liquidity exits.

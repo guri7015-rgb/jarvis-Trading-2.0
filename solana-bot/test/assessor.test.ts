@@ -155,6 +155,21 @@ describe("Assessor end to end (fake network)", () => {
     expect(row).toMatchObject({ verdict: "PASS", buy_route: "Pump.fun Amm", top10_wallet_pct: 12, creator_pct: 3, size_cad: 30, sol_cad: 140 });
   });
 
+  it("quick test first: no holder read, a data-only reject in seconds, then the full check right after", async () => {
+    const { a, db, calls } = await setup();
+    a.addFast(PUMP_MINT, "scanner", false, true);
+    const quick = await a.tick();
+    expect(quick?.gate.verdict).toBe("REJECT");
+    expect(quick?.gate.rejects.map((r) => `${r.rule}:${r.kind}`)).toEqual(["HOLDER_READ:data"]);
+    expect(calls()).toBe(2); // accounts and priority fee; no holder reads
+    const rows = () => db.prepare("SELECT verdict, candidate_source FROM assessments ORDER BY at, id").all() as { verdict: string; candidate_source: string }[];
+    expect(rows()).toEqual([{ verdict: "REJECT", candidate_source: "scanner:quick" }]);
+    // The full check is queued at once and is not held back by the 60 s rule.
+    const full = await a.tick();
+    expect(full?.gate.verdict).toBe("PASS");
+    expect(rows().map((r) => r.candidate_source)).toEqual(["scanner:quick", "scanner"]);
+  });
+
   it("rejects a token you could buy but not sell, and waits before looking again", async () => {
     const { a, db, clock } = await setup(true);
     a.addCandidates([{ mint: PUMP_MINT, source: "test", liquidityUsd: 50_000 }]);

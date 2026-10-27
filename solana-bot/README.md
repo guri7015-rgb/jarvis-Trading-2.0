@@ -36,7 +36,7 @@ npm run discover -- --assess --signals --paper --dashboard   # paper trading wit
 npm run discover -- --assess --signals --paper --explore --dashboard   # same money caps, looser entry rules; measures execution, never counts as evidence
 npm run discover -- --assess --signals --paper --drill --dashboard     # forced paper entry every 5 min, no strategy; exercises fills and exits only
 npm run discover -- --assess --signals --paper --explore --scan --dashboard   # plus the firehose scanner: movers found within seconds, fast-laned into the safety check
-# then open http://127.0.0.1:4777/desk for the live signal desk: entries, blocked setups, majors long/short plans, scorecard
+# then open http://127.0.0.1:4777/desk for the live signal desk, and http://127.0.0.1:4777/board for the meme-coin board (launched -> quick test -> buy early / dip hunt -> sell)
 npm run backtest                                     # recorded tapes with modelled fills, split train/validation/test
 npm run export                                       # positions.csv and orders.csv for your records
 npm run calibrate                                    # where recorded data sits against each threshold

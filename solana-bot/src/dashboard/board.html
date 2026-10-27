@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meme Board</title>
+<style>
+  /* A coin moves left to right: LAUNCHED -> QUICK TEST -> BUY EARLY / DIP HUNT -> SELL. The whole trip can take five minutes. */
+  :root { --bg: #0b0e14; --panel: #131824; --panel2: #1a2130; --line: #26304a; --fg: #eef2f8; --muted: #8a94ab;
+    --go: #22d47a; --gobg: #0f3a25; --amber: #f4b942; --amberbg: #3b2d0c; --red: #ff5f57; --redbg: #3a1a18; --blue: #6c9cff; --bluebg: #1b2a52; --purple: #c084fc; --purplebg: #2e1b4a;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; --sans: Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 var(--sans); }
+  .wrap { padding-block: 12px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 2000px; margin: 0 auto; }
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; padding: 10px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .brand { font-weight: 800; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--go); box-shadow: 0 0 10px var(--go); } .dot.off { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .kv { color: var(--muted); font-size: 12px; } .kv b { color: var(--fg); font-family: var(--mono); }
+  .spacer { flex: 1; }
+  button { font: inherit; font-weight: 600; background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; } button.on { background: var(--gobg); border-color: var(--go); color: var(--go); }
+  a { color: var(--muted); font-size: 12px; }
+  .now { margin-top: 12px; padding: 16px 20px; border-radius: 14px; border: 2px solid var(--line); background: var(--panel); display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .now.go { border-color: var(--go); background: var(--gobg); animation: pulse 1.2s ease-in-out 10; }
+  .now.red { border-color: var(--red); background: var(--redbg); }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--go), 0 0 40px var(--go); } }
+  @media (prefers-reduced-motion: reduce) { .now.go, .card.fresh { animation: none !important; } }
+  .now .big { font-size: 26px; font-weight: 900; letter-spacing: .01em; }
+  .now .big b { font-family: var(--mono); }
+  .now .sub { color: var(--muted); font-size: 13px; }
+  .cols { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+  @media (max-width: 1500px) { .cols { grid-template-columns: repeat(3, minmax(0, 1fr)); } } @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px; min-width: 0; min-height: 420px; }
+  .col h2 { margin: 0 0 2px; font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .col .sub { color: var(--muted); font-size: 11px; margin: 0 0 8px; }
+  .count { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; font-size: 11px; font-weight: 600; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
+  .tag.go { background: var(--gobg); color: var(--go); } .tag.amber { background: var(--amberbg); color: var(--amber); } .tag.red { background: var(--redbg); color: var(--red); } .tag.blue { background: var(--bluebg); color: var(--blue); } .tag.purple { background: var(--purplebg); color: var(--purple); } .tag.grey { background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
+  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; min-width: 0; }
+  .card.go { border-color: var(--go); } .card.amber { border-color: var(--amber); } .card.red { border-color: var(--red); } .card.blue { border-color: var(--blue); } .card.purple { border-color: var(--purple); }
+  .card.fresh { animation: flash 1s ease-in-out 8; } @keyframes flash { 50% { box-shadow: 0 0 0 3px var(--amber); } }
+  .tok { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; flex: none; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; font-weight: 700; font-size: 11px; color: var(--muted); overflow: hidden; } .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .t1 { font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .t1 .nm { font-weight: 400; color: var(--muted); margin-left: 5px; font-size: 12px; }
+  .t2 { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .age { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; flex: none; }
+  .say { margin: 6px 0 0; font-size: 13px; line-height: 1.5; } .say b { font-family: var(--mono); }
+  .up { color: var(--go); } .down { color: var(--red); }
+  .live { margin-top: 6px; font-family: var(--mono); font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .empty { color: var(--muted); font-style: italic; padding: 6px 0; font-size: 13px; }
+  .why { color: var(--muted); font-size: 12px; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top">
+  <div class="brand"><span class="dot" id="dot"></span>Meme Board</div>
+  <span class="tag blue" id="mode">PAPER</span>
+  <span class="kv">updated <b id="upd">–</b></span>
+  <span class="kv">Launches reach this screen within seconds of the chain. Cards move on their own.</span>
+  <span class="spacer"></span>
+  <button id="sound" type="button">Sound off</button>
+  <a href="/desk">desk</a> <a href="/">dashboard</a>
+</div>
+
+<div class="now" id="now"></div>
+
+<div class="cols">
+  <div class="col"><h2>1 · LAUNCHED <span class="count" id="n1">0</span></h2><p class="sub">Born in the last 3 minutes. Newest on top.</p><div id="c1"></div></div>
+  <div class="col"><h2>2 · QUICK TEST PASSED <span class="count" id="n2">0</span></h2><p class="sub">Can be sold back, no mint or freeze switch, real SOL in it, trip cost known. Holder check still running.</p><div id="c2"></div></div>
+  <div class="col"><h2>3 · <span class="tag go">BUY EARLY</span> <span class="count" id="n3">0</span></h2><p class="sub">Brand new, buyers piling in, not run away yet. Pattern C.</p><div id="c3"></div></div>
+  <div class="col"><h2>4 · <span class="tag purple">DIP HUNT</span> <span class="count" id="n4">0</span></h2><p class="sub">Missed the first move? It ran, pulled back, selling dried up, buyers are back. Pattern E.</p><div id="c4"></div></div>
+  <div class="col"><h2>5 · <span class="tag red">SELL</span> <span class="count" id="n5">0</span></h2><p class="sub">Dump, broad selling, failed breakout or liquidity leaving. Get out whether or not you hold it.</p><div id="c5"></div></div>
+</div>
+<p class="why" style="margin-top:10px">Other patterns (A, B) show on the <a href="/desk">desk</a>. Everything here is price and trade data from the chain; "buyers back" means distinct wallets, not people talking. No news feed is connected.</p>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const short = (m) => m.slice(0, 4) + "…" + m.slice(-4);
+const ago = (s) => s < 60 ? s + "s" : s < 3600 ? Math.round(s / 60) + " min" : (s / 3600).toFixed(1) + " h";
+const px = (x) => x === null || x === undefined ? "–" : x < 0.001 ? Number(x).toExponential(3) : Number(x).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const pct = (x, d = 1) => x === null || x === undefined ? "–" : (x > 0 ? "+" : "") + Number(x).toFixed(d) + "%";
+const cls = (x) => x > 0 ? "up" : x < 0 ? "down" : "";
+let META = {}, LIVE = {}, seen = new Set(), first = true, soundOn = false, audio;
+try { soundOn = localStorage.getItem("deskSound") === "1"; } catch {}
+function beep(kind) {
+  if (!soundOn) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = "sine"; o.frequency.value = kind === "buy" ? 880 : kind === "sell" ? 330 : 520;
+    g.gain.value = 0.0001; o.connect(g); g.connect(audio.destination); o.start();
+    g.gain.exponentialRampToValueAtTime(0.3, audio.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + (kind === "buy" ? 0.6 : 0.3));
+    o.stop(audio.currentTime + 0.7);
+  } catch {}
+}
+function tok(mint) {
+  const m = META[mint] || {};
+  const label = m.symbol || (m.name ? m.name.slice(0, 12) : short(mint));
+  const initials = (m.symbol || m.name || mint).replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
+  const img = m.icon ? `<img src="${esc(m.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='${esc(initials)}'">` : esc(initials);
+  return `<div class="tok" title="${esc(mint)}"><span class="avatar">${img}</span><div style="min-width:0"><div class="t1">${esc(label)}${m.name && m.symbol ? `<span class="nm">${esc(m.name)}</span>` : ""}</div><div class="t2">${esc(short(mint))}</div></div></div>`;
+}
+function zone(s) {
+  const l = LIVE[s.mint];
+  if (!l) return `<span class="tag grey">no live price</span>`;
+  const moved = s.refPrice ? (l.price / s.refPrice - 1) * 100 : null;
+  let st;
+  if (s.stop !== null && l.price <= s.stop) st = `<span class="tag red">STOPPED OUT</span>`;
+  else if (s.target !== null && l.price >= s.target) st = `<span class="tag go">TARGET HIT</span>`;
+  else if (s.maxEntryPrice !== null && l.price <= s.maxEntryPrice) st = `<span class="tag go">IN ZONE</span>`;
+  else st = `<span class="tag amber">GONE, ABOVE ENTRY</span>`;
+  return `${st}<span>now <b>${px(l.price)}</b></span><span class="${cls(moved)}">${pct(moved)} since signal</span>`;
+}
+function sigCard(s, color, fresh) {
+  const blocked = s.kind !== "ENTER";
+  return `<div class="card ${blocked ? "amber" : color} ${fresh ? "fresh" : ""}">
+    <div class="head">${tok(s.mint)}<div class="age">${ago(s.ageS)} ago</div></div>
+    ${blocked ? `<p class="say">Pattern is there. <b>Not a buy</b>: ${esc(whyNot(s))}</p>` : `<p class="say"><b>Buy</b> up to <b>${px(s.maxEntryPrice)}</b>. <b>Sell</b> at <b>${px(s.target)}</b> <span class="up">(${pct(s.targetPct)})</span>. <b>Out</b> at <b>${px(s.stop)}</b> <span class="down">(${pct(s.stopPct === null ? null : -s.stopPct)})</span>.<br>Max <b>CAD ${s.sizeCad ? s.sizeCad.toFixed(0) : "–"}</b>, risk <b>CAD ${s.plannedLossCad ? s.plannedLossCad.toFixed(2) : "–"}</b>. ${s.timeStopS ? Math.round(s.timeStopS / 60) + " min max." : ""}</p>`}
+    <div class="live">${zone(s)}</div>
+    <div class="why">${esc((s.why || []).join(" · "))}</div>
+  </div>`;
+}
+function whyNot(s) {
+  if (s.blockedBy === "COSTS") { const m = /expected ([\d.]+)% vs break-even ([\d.]+)%/.exec(s.blockedDetail || ""); return m ? `move ${m[1]}%, trip costs ${m[2]}%.` : "costs eat the move."; }
+  if (s.blockedBy === "TOKEN_GATE") return (s.blockedDetail || "").includes("research") ? "holder check not done yet." : "safety check: " + (s.blockedDetail || "not passed") + ".";
+  if (s.blockedBy === "PORTFOLIO") return (s.blockedDetail || "daily limit").replace(/^.*?: /, "") + ".";
+  if (s.blockedBy === "DATA_HEALTH") return "feed hiccup at that moment.";
+  return (s.blockedBy || "") + " " + (s.blockedDetail || "");
+}
+function render(s) {
+  META = s.meta || {}; LIVE = s.live || {};
+  $("mode").textContent = s.mode; $("upd").textContent = new Date(s.now).toISOString().slice(11, 19) + "Z"; $("dot").className = "dot";
+  const b = s.board;
+  // ONE THING NOW: the newest buy that cleared every gate in the last 3 minutes, else nothing.
+  const buys = s.signals.filter((x) => x.kind === "ENTER" && x.strategy !== "DRILL" && x.ageS <= 180);
+  const sellNow = b.sell.filter((x) => x.ageS <= 120);
+  if (buys.length) { const x = buys[0]; $("now").className = "now go"; $("now").innerHTML = `<span class="tag go">BUY NOW</span>${tok(x.mint)}<div class="big">up to <b>${px(x.maxEntryPrice)}</b> · out at <b>${px(x.stop)}</b> · max CAD ${x.sizeCad ? x.sizeCad.toFixed(0) : "–"}</div><div class="live">${zone(x)}</div><div class="sub">${ago(x.ageS)} ago · ${esc(strat(x.strategy))}</div>`; }
+  else if (sellNow.length) { const x = sellNow[0]; $("now").className = "now red"; $("now").innerHTML = `<span class="tag red">SELL</span>${tok(x.mint)}<div class="big">get out</div><div class="sub">${esc(x.reasons.join("; "))} · ${ago(x.ageS)} ago</div>`; }
+  else { $("now").className = "now"; $("now").innerHTML = `<div class="big" style="color:var(--muted)">Nothing to do right now</div><div class="sub">${b.launched.length} launches in 3 min · ${b.quickPassed.length} passed the quick test · ${b.buyEarly.length + b.dipHunt.length} patterns, none cleared cost</div>`; }
+  let newBuy = 0, newSell = 0, newOther = 0;
+  for (const x of s.signals) if (!seen.has("s" + x.id)) { seen.add("s" + x.id); if (!first) { if (x.kind === "ENTER") newBuy++; else newOther++; } }
+  for (const x of b.sell) if (!seen.has("x" + x.mint + x.at)) { seen.add("x" + x.mint + x.at); if (!first) newSell++; }
+  if (newBuy) beep("buy"); else if (newSell) beep("sell"); else if (newOther) beep("other");
+  const fresh = (x) => !first && x.ageS < 60;
+  $("n1").textContent = b.launched.length;
+  $("c1").innerHTML = b.launched.length ? b.launched.map((t) => `<div class="card"><div class="head">${tok(t.mint)}<div class="age">${ago(t.ageS)}</div></div><div class="tags"><span class="tag ${t.confirmed ? "go" : "grey"}">${t.confirmed ? "ON CHAIN" : "CHECKING"}</span><span class="tag grey">${esc(t.venue === "pump_curve" ? "pump.fun" : t.venue || "?")}</span>${t.buyers60 !== null ? `<span class="tag ${t.buyers60 >= 8 ? "go" : "grey"}">${t.buyers60} BUYERS / MIN</span>` : ""}</div></div>`).join("") : `<div class="empty">No launches in the last 3 minutes.</div>`;
+  $("n2").textContent = b.quickPassed.length;
+  $("c2").innerHTML = b.quickPassed.length ? b.quickPassed.map((t) => `<div class="card ${t.full ? "go" : ""}"><div class="head">${tok(t.mint)}<div class="age">${ago(t.ageS)}</div></div><div class="tags"><span class="tag ${t.full ? "go" : "amber"}">${t.full ? "FULL CHECK PASSED" : "QUICK TEST PASSED"}</span>${t.costBps !== null ? `<span class="tag ${t.costBps <= 200 ? "go" : t.costBps <= 300 ? "amber" : "red"}">TRIP ${(t.costBps / 100).toFixed(1)}%</span>` : ""}${t.buyers60 !== null ? `<span class="tag grey">${t.buyers60} BUYERS / MIN</span>` : ""}</div>${t.full ? "" : `<div class="why">waiting on: ${esc(t.waitingOn.join(", ").replace(/_/g, " ").toLowerCase())}</div>`}</div>`).join("") : `<div class="empty">Nothing clean in the last 15 minutes.</div>`;
+  $("n3").textContent = b.buyEarly.length;
+  $("c3").innerHTML = b.buyEarly.length ? b.buyEarly.map((x) => sigCard(x, "go", fresh(x))).join("") : `<div class="empty">No early-buyers pattern in the last 10 minutes.</div>`;
+  $("n4").textContent = b.dipHunt.length;
+  $("c4").innerHTML = b.dipHunt.length ? b.dipHunt.map((x) => sigCard(x, "purple", fresh(x))).join("") : `<div class="empty">No dip with buyers coming back in the last 10 minutes.</div>`;
+  $("n5").textContent = b.sell.length;
+  $("c5").innerHTML = b.sell.length ? b.sell.map((x) => `<div class="card red ${fresh(x) ? "fresh" : ""}"><div class="head">${tok(x.mint)}<div class="age">${ago(x.ageS)} ago</div></div><p class="say"><b>Get out.</b> ${esc(x.reasons.join("; "))}.</p><div class="live">${LIVE[x.mint] ? `now <b>${px(LIVE[x.mint].price)}</b>` : ""}</div></div>`).join("") : `<div class="empty">No dumps on watched coins in the last 10 minutes.</div>`;
+  first = false;
+}
+const strat = (s) => ({ A_continuation: "rested, now going again", B_breakout_retest: "broke its high and held", B_breakout_no_retest: "breaking out", C_early_acceleration: "buyers piling in", E_dip_hunt: "dip, buyers back" }[s] || s);
+async function refresh() {
+  try { const r = await fetch("/api/desk", { cache: "no-store" }); const s = await r.json(); if (s.error) { $("dot").className = "dot off"; $("upd").textContent = s.error; return; } render(s); }
+  catch { $("dot").className = "dot off"; $("upd").textContent = "bot not responding"; }
+}
+function setSound(on) { soundOn = on; $("sound").textContent = on ? "Sound on" : "Sound off"; $("sound").className = on ? "on" : ""; try { localStorage.setItem("deskSound", on ? "1" : "0"); } catch {} if (on) beep("other"); }
+$("sound").addEventListener("click", () => setSound(!soundOn));
+setSound(soundOn);
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

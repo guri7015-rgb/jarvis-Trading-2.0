@@ -105,39 +105,49 @@ export class Assessor {
    * the deepest pools (which would make costs look better than they are).
    */
   /** Fast lane: a mover from the scanner is assessed before the rotation, once it is confirmed on-chain. */
-  private fast: string[] = [];
-  /** `front`: a watched coin whose check is going stale goes ahead of scanner movers; the queue never drops it. */
-  addFast(mint: string, source: string, front = false): void {
-    if (this.fast.includes(mint)) return;
-    if (front) this.fast.unshift(mint);
-    else if (this.fast.length < 20) this.fast.push(mint);
+  private fast: { mint: string; quick: boolean }[] = [];
+  /**
+   * `front`: a watched coin whose check is going stale goes ahead of scanner movers; the queue never drops it.
+   * `quick`: run the quick test first (mint, curve, quotes, costs; no holder read), then queue the full check.
+   */
+  addFast(mint: string, source: string, front = false, quick = false): void {
+    if (this.fast.some((f) => f.mint === mint)) return;
+    if (front) this.fast.unshift({ mint, quick });
+    else if (this.fast.length < 20) this.fast.push({ mint, quick });
     else return; // full of movers already; a new mover can wait for the next tick
     if (!this.candidates.has(mint)) this.candidates.set(mint, { mint, source, addedAt: this.d.clock.now() });
   }
+  /** The next fast-lane pick's mode, consumed by tick(). */
+  private nextQuick = false;
 
   private pick(): Candidate | undefined {
     const now = this.d.clock.now();
-    for (const mint of [...this.fast]) {
+    for (const entry of [...this.fast]) {
+      const { mint, quick } = entry;
       const c = this.candidates.get(mint);
       const t = this.d.registry.get(mint);
       if (!c || !t) {
-        this.fast = this.fast.filter((m) => m !== mint);
+        this.fast = this.fast.filter((m) => m.mint !== mint);
         continue;
       }
       if (t.confirm_status === "PENDING") continue;
-      this.fast = this.fast.filter((m) => m !== mint);
+      this.fast = this.fast.filter((m) => m.mint !== mint);
       if (t.confirm_status !== "CONFIRMED" || !t.launch_venue || !LAUNCH_VENUES.has(t.launch_venue)) {
         this.candidates.delete(mint);
         continue;
       }
       // A fast-lane re-check may run once the last check is 60 s old, whatever its own recheck delay says.
-      const last = this.d.db.prepare("SELECT at FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1").get(mint) as { at: number } | undefined;
-      if (last && now - last.at < 60_000) {
-        this.fast.push(mint); // too soon: keep it queued
+      // The full check that follows a quick test runs at once.
+      const last = this.d.db.prepare("SELECT at, candidate_source FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1").get(mint) as { at: number; candidate_source: string | null } | undefined;
+      const lastWasQuick = !!last?.candidate_source?.endsWith(":quick");
+      if (last && now - last.at < 60_000 && !(lastWasQuick && !quick)) {
+        this.fast.push(entry); // too soon: keep it queued
         continue;
       }
+      this.nextQuick = quick;
       return c;
     }
+    this.nextQuick = false;
     const band = (c: Candidate) => liquidityBand(c.liquidityUsd);
     const start = this.bandTurn++ % BANDS;
     const ordered = [...this.candidates.values()].sort((a, b) => {
@@ -172,6 +182,15 @@ export class Assessor {
       this.stats.skippedNotReady++;
       return undefined;
     }
+    const quick = this.nextQuick;
+    this.nextQuick = false;
+    if (quick) {
+      // Quick test now; the full check (with holders) goes straight back on the lane.
+      const rec = await this.assess({ ...c, source: `${c.source}:quick` }, true);
+      this.candidates.set(c.mint, c);
+      this.fast.unshift({ mint: c.mint, quick: false });
+      return rec;
+    }
     this.candidates.delete(c.mint);
     return this.assess(c);
   }
@@ -193,7 +212,8 @@ export class Assessor {
     }
   }
 
-  async assess(c: Candidate): Promise<AssessmentRecord> {
+  /** `quick`: skip the holder read (the slow part); the result is a data-kind reject at most, never a PASS. */
+  async assess(c: Candidate, quick = false): Promise<AssessmentRecord> {
     const p = this.d.policy;
     const started = this.d.clock.now();
     const token = this.d.registry.get(c.mint);
@@ -232,6 +252,7 @@ export class Assessor {
     let holders: HolderReport | Error;
     try {
       if (mint instanceof Error) throw new Error("mint unavailable");
+      if (quick) throw new Error("quick test: holders not read yet");
       if (this.d.clock.now() < this.holderBreakerUntil) throw new Error("holder data paused: RPC rate-limited getTokenLargestAccounts");
       holders = await analyzeHolders(this.d.rpc, c.mint, mint.supply, curve?.creator ?? token?.creator ?? null);
     } catch (e) {

@@ -34,7 +34,7 @@ const seeded = (seed: number) => {
 
 describe("backtest (modelled)", () => {
   it("with the default limits, a textbook A setup is rejected at the COSTS gate (the cost bar is real)", () => {
-    const r = backtestTape("M", "pumpswap", winningTape(), [], { limits: DEFAULT_LIMITS, stepMs: 5000, sizeCad: 30, solCad: 140, random: () => 0.5 });
+    const r = backtestTape("M", "pumpswap", winningTape(), [], { limits: DEFAULT_LIMITS, stepMs: 5000, sizeCad: 30, solCad: 140, random: () => 0.5, strategies: ["A_continuation"] });
     expect(r.signals).toBeGreaterThan(0);
     expect(r.rejectedByGate.COSTS).toBe(r.signals); // 4% modelled round trip + 2% stress vs a ~3% stop: R:R < 1.5
     expect(r.trades).toHaveLength(0);

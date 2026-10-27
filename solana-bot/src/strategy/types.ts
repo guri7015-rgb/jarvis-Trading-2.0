@@ -1,6 +1,6 @@
 import type { Features } from "./features.ts";
 
-export type StrategyId = "A_continuation" | "B_breakout_retest" | "B_breakout_no_retest" | "C_early_acceleration" | "DRILL";
+export type StrategyId = "A_continuation" | "B_breakout_retest" | "B_breakout_no_retest" | "C_early_acceleration" | "E_dip_hunt" | "DRILL";
 
 /**
  * An entry idea. Strategies only describe the setup; the risk manager decides

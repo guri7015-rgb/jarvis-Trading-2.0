@@ -19,6 +19,7 @@ import { strategyA } from "../strategy/strategyA.ts";
 import { strategyB } from "../strategy/strategyB.ts";
 import { strategyC } from "../strategy/strategyC.ts";
 import { strategyD } from "../strategy/strategyD.ts";
+import { strategyE } from "../strategy/strategyE.ts";
 import type { Signal, StrategyId } from "../strategy/types.ts";
 import { DEFAULT_PARAMS, type StrategyParams } from "../strategy/params.ts";
 
@@ -124,7 +125,7 @@ export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tap
   let open: { entryAt: number; entryPrice: number; tokens: number; costBasis: number; sig: Signal; peakNet: number; partial: boolean; stuck: boolean; fees: number } | undefined;
   const roundTripCost = 2 * (cm.venueFeePerSide + cm.impactPerSide) + 2 * cm.haircut;
   const assessment: AssessmentView = { at: 0, verdict: "PASS", researchOnly: false, totalCostBps: Math.round(roundTripCost * 10_000), breakEvenPct: roundTripCost * 100, sizeCad: o.sizeCad, solCad: o.solCad };
-  const strategies = o.strategies ?? ["A_continuation", "B_breakout_retest", "B_breakout_no_retest", "C_early_acceleration"];
+  const strategies = o.strategies ?? ["A_continuation", "B_breakout_retest", "B_breakout_no_retest", "C_early_acceleration", "E_dip_hunt"];
   const sizeSol = o.sizeCad / o.solCad;
 
   for (let now = start; now <= end; now += o.stepMs) {
@@ -199,6 +200,7 @@ export function backtestTape(mint: string, venue: "pump_curve" | "pumpswap", tap
     if (strategies.includes("B_breakout_retest")) sigs.push(strategyB(f, ctx, "retest", P.B));
     if (strategies.includes("B_breakout_no_retest")) sigs.push(strategyB(f, ctx, "no_retest", P.B));
     if (strategies.includes("C_early_acceleration")) sigs.push(strategyC(f, ctx, P.C));
+    if (strategies.includes("E_dip_hunt")) sigs.push(strategyE(f, ctx, P.E));
     for (const s of sigs) {
       if (s.action !== "ENTER") continue;
       if ((cooldown.get(s.strategy) ?? 0) > now) continue;

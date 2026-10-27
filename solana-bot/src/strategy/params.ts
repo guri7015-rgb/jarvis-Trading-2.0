@@ -17,15 +17,17 @@ import { A_PARAMS } from "./strategyA.ts";
 import { B_PARAMS } from "./strategyB.ts";
 import { C_PARAMS } from "./strategyC.ts";
 import { D_PARAMS } from "./strategyD.ts";
+import { E_PARAMS } from "./strategyE.ts";
 
 export interface StrategyParams {
   A: typeof A_PARAMS;
   B: typeof B_PARAMS;
   C: typeof C_PARAMS;
   D: typeof D_PARAMS;
+  E: typeof E_PARAMS;
 }
 
-export const DEFAULT_PARAMS: StrategyParams = { A: { ...A_PARAMS }, B: { ...B_PARAMS }, C: { ...C_PARAMS }, D: { ...D_PARAMS } };
+export const DEFAULT_PARAMS: StrategyParams = { A: { ...A_PARAMS }, B: { ...B_PARAMS }, C: { ...C_PARAMS }, D: { ...D_PARAMS }, E: { ...E_PARAMS } };
 
 /**
  * Explore-mode parameters (paper only): the same shapes with looser entry
@@ -37,6 +39,7 @@ export const EXPLORE_PARAMS: StrategyParams = {
   B: { ...B_PARAMS, minRangeTrades: 10, minBreakoutPct: 0.01, minRateAccel: 1.5, minBuyers60: 5, maxTopBuyerShare: 0.4, targetRangeFraction: 0.8 },
   C: { ...C_PARAMS, minTrades30: 6, minRateAccel: 1.5, minNewBuyers30: 4, minImbalance60: 0.2, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, minRet60: 0.02, targetPct: 0.15 },
   D: { ...D_PARAMS },
+  E: { ...E_PARAMS, minRunPct: 0.1, minBuyers10: 2, minNewBuyers30: 3, minImbalance60: 0, maxTopBuyerShare: 0.45, maxRepeatedSizeRatio: 0.7, targetFractionToHigh: 0.8 },
 };
 
 /** Drill-mode data quality: the entry fills from a live quote, so the tape only needs a recent price. */
@@ -47,7 +50,7 @@ export const EXPLORE_QUALITY = { minTrades180s: 10, maxSecondsSinceLastTrade: 60
 
 const numRecord = (template: Record<string, number>) => z.object(Object.fromEntries(Object.keys(template).map((k) => [k, z.number().finite().optional()]))).strict();
 const FileSchema = z
-  .object({ A: numRecord(A_PARAMS).optional(), B: numRecord(B_PARAMS).optional(), C: numRecord(C_PARAMS).optional(), D: numRecord(D_PARAMS).optional(), note: z.string().max(500).optional() })
+  .object({ A: numRecord(A_PARAMS).optional(), B: numRecord(B_PARAMS).optional(), C: numRecord(C_PARAMS).optional(), D: numRecord(D_PARAMS).optional(), E: numRecord(E_PARAMS).optional(), note: z.string().max(500).optional() })
   .strict();
 
 export interface ParamsLoad {
@@ -62,9 +65,9 @@ export function loadStrategyParams(path?: string): ParamsLoad {
   const raw = readFileSync(path, "utf8");
   const parsed = FileSchema.safeParse(JSON.parse(raw));
   if (!parsed.success) throw new Error(`invalid strategy params file: ${parsed.error.issues[0]?.path.join(".")}`);
-  const params: StrategyParams = { A: { ...A_PARAMS }, B: { ...B_PARAMS }, C: { ...C_PARAMS }, D: { ...D_PARAMS } };
+  const params: StrategyParams = { A: { ...A_PARAMS }, B: { ...B_PARAMS }, C: { ...C_PARAMS }, D: { ...D_PARAMS }, E: { ...E_PARAMS } };
   const overridden: string[] = [];
-  for (const k of ["A", "B", "C", "D"] as const) {
+  for (const k of ["A", "B", "C", "D", "E"] as const) {
     for (const [key, v] of Object.entries(parsed.data[k] ?? {})) {
       if (v === undefined) continue;
       (params[k] as Record<string, number>)[key] = v;

@@ -3,6 +3,7 @@
  *
  *   GET  /            the page
  *   GET  /desk        the live signal desk
+ *   GET  /board       the meme-coin board: launched -> quick test -> buy early / dip hunt -> sell
  *   GET  /api/desk    entries, setups, movers, majors plans, scorecard
  *   GET  /api/state   everything the page shows
  *   POST /api/halt    emergency stop: flattens every open paper position (the
@@ -29,6 +30,7 @@ export function startDashboard(deps: DashboardDeps & { desk?: DeskDeps }, logger
   const template = readFileSync(resolve(import.meta.dirname, "page.html"), "utf8");
   const html = template.replace('<html lang="en">', `<html lang="en" data-halt-token="${token}">`);
   const deskHtml = readFileSync(resolve(import.meta.dirname, "desk.html"), "utf8");
+  const boardHtml = readFileSync(resolve(import.meta.dirname, "board.html"), "utf8");
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     try {
@@ -42,6 +44,11 @@ export function startDashboard(deps: DashboardDeps & { desk?: DeskDeps }, logger
         const body = JSON.stringify(deps.desk ? deskState(deps.desk) : { error: "desk not enabled: start with --signals" }, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
         res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
         res.end(body);
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/board") {
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        res.end(boardHtml);
         return;
       }
       if (req.method === "GET" && url.pathname === "/desk") {

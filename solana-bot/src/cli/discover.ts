@@ -109,7 +109,9 @@ if (scan) {
         const watched = engine?.watched().some((w) => w.mint === mint) ?? false;
         const t = registry.get(mint);
         status = watched ? "watching" : a ? `${a.verdict} ${Math.round((now - a.at) / 1000)}s ago` : t?.confirm_status !== "CONFIRMED" ? `queued (${t?.confirm_status ?? "new"})` : !t.launch_venue ? "skipped: not a launchpad token" : "queued";
-        if (!a || now - a.at > 90_000) assessor!.addFast(mint, "scanner");
+        // First look at a mover is the quick test (seconds); the full check with holders follows on its own.
+        if (!a) assessor!.addFast(mint, "scanner", false, true);
+        else if (now - a.at > 90_000) assessor!.addFast(mint, "scanner");
       } else if (poolMint.get(m.key) === null) status = "not SOL-quoted";
       out.push({ ...m, mint, status });
     }
@@ -237,7 +239,9 @@ if (args.includes("--signals")) {
     limits: lim.limits,
     limitsRefused: lim.refused,
     riskState: new RiskStateStore(deps.db, () => deps.clock.now(), paperMode),
-    research: args.includes("--research"),
+    // With the scanner, coins that passed only the quick test are watched too, so strategies can
+    // judge them while the holder check finishes. They can't be entered until it does.
+    research: args.includes("--research") || args.includes("--scan"),
     newLaunchMaxAgeMs: cfg.discovery.newLaunchMaxAgeMs,
     earlyMaxAgeMs: cfg.discovery.earlyMaxAgeMs,
   });
@@ -318,7 +322,16 @@ if (args.includes("--dashboard")) {
     movers: scanner ? () => ({ list: moversNow, stats: scanner!.stats }) : undefined,
     now: () => deps.clock.now(),
     desk: outcomes
-      ? { db: deps.db, outcomes, majors, movers: scanner ? () => ({ list: moversNow, stats: scanner!.stats }) : undefined, watched: () => engine?.watched() ?? [], mode: drill ? "PAPER DRILL" : explore ? "PAPER EXPLORE" : "PAPER", now: () => deps.clock.now() }
+      ? {
+          db: deps.db,
+          outcomes,
+          majors,
+          movers: scanner ? () => ({ list: moversNow, stats: scanner!.stats }) : undefined,
+          buyersFor: scanner ? (mint: string) => new Set(scanner!.recent(mint).filter((x) => x.side === "buy" && deps.clock.now() - x.t <= 60_000).map((x) => x.wallet)).size : undefined,
+          watched: () => engine?.watched() ?? [],
+          mode: drill ? "PAPER DRILL" : explore ? "PAPER EXPLORE" : "PAPER",
+          now: () => deps.clock.now(),
+        }
       : undefined,
   };
   dashboard = startDashboard(dashDeps, deps.logger, pIdx >= 0 ? Number(args[pIdx + 1]) : 4777);

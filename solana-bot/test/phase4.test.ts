@@ -16,6 +16,7 @@ import { strategyA } from "../src/strategy/strategyA.ts";
 import { strategyB } from "../src/strategy/strategyB.ts";
 import { strategyC } from "../src/strategy/strategyC.ts";
 import { strategyD } from "../src/strategy/strategyD.ts";
+import { strategyE } from "../src/strategy/strategyE.ts";
 import type { Signal } from "../src/strategy/types.ts";
 import { fixtureJson } from "./helpers.ts";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -178,6 +179,24 @@ describe("strategies (synthetic scenarios)", () => {
     expect(strategyC(f, { tokenAgeMs: 5 * 60_000 }).action).toBe("ENTER");
     expect(strategyC(f, { tokenAgeMs: 60 * 60_000 }).reasons[0]).toMatch(/not new/);
     expect(strategyC(f, {}).reasons[0]).toMatch(/age unknown/);
+  });
+
+  it("E buys the dip after a run: pulled back, selling dried up, buyers back; never a coin still falling or one that never ran", () => {
+    // Run 1.00 -> 1.30 over 150 s, pull back to 1.15 on sells, then bounce to 1.19 on fresh buyers.
+    const t: Trade[] = [...span(0, 150, 3, (s) => 1 + (s / 150) * 0.3)];
+    t.push(...span(150, 240, 3, (s) => 1.3 - ((s - 150) / 90) * 0.15, () => "sell"));
+    t.push(...span(240, 300, 2, (s) => 1.15 + ((s - 240) / 60) * 0.04));
+    const f = computeFeatures("M", t, sec(300));
+    const e = strategyE(f, {});
+    expect(e.action).toBe("ENTER");
+    expect(e.invalidationPrice!).toBeLessThan(1.15);
+    expect(e.targetPrice!).toBeGreaterThan(f.last!);
+    expect(e.targetPrice!).toBeLessThan(1.3);
+    // Still falling: no bounce yet.
+    const falling: Trade[] = [...span(0, 150, 3, (s) => 1 + (s / 150) * 0.3), ...span(150, 300, 3, (s) => 1.3 - ((s - 150) / 150) * 0.2, () => "sell")];
+    expect(strategyE(computeFeatures("M", falling, sec(300)), {}).reasons[0]).toMatch(/still falling|sellers|gave back/);
+    // Never ran: nothing to buy the dip of.
+    expect(strategyE(computeFeatures("M", span(0, 300, 3, () => 1), sec(300)), {}).reasons[0]).toMatch(/no run/);
   });
 
   it("D vetoes entries on a dump and exits an open position below invalidation, but never exits on bad data alone", () => {
