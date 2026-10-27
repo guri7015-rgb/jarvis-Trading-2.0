@@ -20,7 +20,7 @@ import { TradeStream } from "../market/tradeStream.ts";
 import { EXPLORE_LIMITS, loadRiskLimits } from "../risk/limits.ts";
 import { RiskStateStore } from "../risk/riskState.ts";
 import { SessionStore } from "../storage/sessions.ts";
-import { SignalEngine } from "../strategy/engine.ts";
+import { MAX_WATCH_EXPLORE, SignalEngine } from "../strategy/engine.ts";
 import { Ledger, type Mode } from "../paper/ledger.ts";
 import { CONSERVATIVE_SIM, PaperExecutor } from "../paper/executor.ts";
 import { PaperTrader } from "../paper/trader.ts";
@@ -121,6 +121,7 @@ if (args.includes("--signals")) {
   engine = new SignalEngine({
     params: strategyParams.params,
     quality: explore ? EXPLORE_QUALITY : undefined,
+    maxWatch: explore ? MAX_WATCH_EXPLORE : undefined,
     trader: paper?.trader,
     ledger: paper?.ledger,
     fx: paper?.fx,

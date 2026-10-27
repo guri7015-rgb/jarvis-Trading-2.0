@@ -60,6 +60,8 @@ export interface EngineDeps {
   params?: StrategyParams;
   /** Data-quality rules for features (defaults, or the explore set). */
   quality?: QualityRules;
+  /** Watchlist size; defaults to MAX_WATCH. */
+  maxWatch?: number;
 }
 
 interface Watched {
@@ -69,7 +71,9 @@ interface Watched {
   decimals: number;
 }
 
+/** Default watchlist size. Explore mode watches more so the daily entry allowance actually gets used. */
 export const MAX_WATCH = 3;
+export const MAX_WATCH_EXPLORE = 6;
 const WATCH_IDLE_MS = 10 * 60_000;
 const WATCH_MAX_MS = 60 * 60_000;
 const ASSESSMENT_LOOKBACK_MS = 10 * 60_000;
@@ -161,7 +165,8 @@ export class SignalEngine {
         this.stats.watchDrops++;
       }
     }
-    if (this.watch.size >= MAX_WATCH) return;
+    const maxWatch = this.d.maxWatch ?? MAX_WATCH;
+    if (this.watch.size >= maxWatch) return;
     // Newest assessment per token in the lookback, cheapest round trip first. The cost
     // bar is the whole game: a 0.5% trip needs a far smaller move to pay than a 4% one.
     const rows = this.d.db
@@ -171,7 +176,7 @@ export class SignalEngine {
     const latest = rows.filter((r) => (seen.has(r.mint) ? false : (seen.add(r.mint), true)));
     latest.sort((a, b) => (a.total_cost_bps ?? 1e9) - (b.total_cost_bps ?? 1e9));
     for (const r of latest) {
-      if (this.watch.size >= MAX_WATCH) break;
+      if (this.watch.size >= maxWatch) break;
       if (this.watch.has(r.mint)) continue;
       const rejects = JSON.parse(r.rejects) as { kind: string }[];
       const researchOnly = r.verdict === "REJECT" && rejects.length > 0 && rejects.every((x) => x.kind === "data");

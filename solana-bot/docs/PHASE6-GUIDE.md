@@ -31,6 +31,7 @@ What it changes, all paper:
 - Entry edge floors: reward-to-risk 1.0 instead of 1.5, no minimum edge over break-even.
 - Strategy thresholds: looser A, B and C entry rules (`EXPLORE_PARAMS`). D, the veto, is unchanged.
 - Data quality: 10 trades in 3 minutes instead of 20, a minute of silence allowed instead of 30 s.
+- Watchlist: 6 coins instead of 3, cheapest round trip first.
 
 What it does not change: position size, loss per trade, daily loss, entries per day, one position at a time, the losing-streak cool-down, the stress allowance, every token safety gate.
 
