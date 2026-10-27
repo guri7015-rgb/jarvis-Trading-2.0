@@ -22,11 +22,14 @@ const MIN_TRADES = 100;
 const MIN_DAYS = 5;
 const cfg = loadConfig();
 const db = openDb(resolve(cfg.DATA_DIR, "solana-bot.sqlite"));
-const rows = db.prepare("SELECT strategy, state, opened_at, closed_at, cost_basis_lamports, proceeds_lamports, realized_pnl_lamports, realized_pnl_cad, sol_cad_at_entry FROM positions WHERE state IN ('CLOSED','FAILED','STUCK')").all() as {
+// Only mode 'paper' counts. Explore-mode positions ran under looser entry rules and are reported separately.
+const rows = db.prepare("SELECT strategy, state, opened_at, closed_at, cost_basis_lamports, proceeds_lamports, realized_pnl_lamports, realized_pnl_cad, sol_cad_at_entry FROM positions WHERE mode = 'paper' AND state IN ('CLOSED','FAILED','STUCK')").all() as {
   strategy: string; state: string; opened_at: number | null; closed_at: number | null; cost_basis_lamports: string; proceeds_lamports: string; realized_pnl_lamports: string | null; realized_pnl_cad: number | null; sol_cad_at_entry: number | null;
 }[];
+const explore = db.prepare("SELECT COUNT(*) n, SUM(state='FAILED') failed, SUM(realized_pnl_cad) pnl FROM positions WHERE mode = 'paper_explore' AND state IN ('CLOSED','FAILED','STUCK')").get() as { n: number; failed: number | null; pnl: number | null };
 
 const out: string[] = [`# Promotion evidence — ${rows.length} resolved paper positions — ${new Date().toISOString()}`];
+if (explore.n) out.push(`\nExplore mode: ${explore.n} resolved positions (${explore.failed ?? 0} failed entries), net ${(explore.pnl ?? 0) >= 0 ? "+" : ""}CAD ${(explore.pnl ?? 0).toFixed(2)}. Looser entry rules; NOT counted below.`);
 const byStrategy = new Map<string, typeof rows>();
 for (const r of rows) (byStrategy.get(r.strategy) ?? byStrategy.set(r.strategy, []).get(r.strategy)!).push(r);
 if (!byStrategy.size) out.push("\nNo resolved paper positions yet. Every strategy: NOT ELIGIBLE.");

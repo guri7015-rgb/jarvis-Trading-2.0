@@ -22,6 +22,8 @@ export interface DashboardDeps {
   marks?: () => Map<string, bigint>;
   watched?: () => { mint: string; venue: string; researchOnly: boolean; addedAt: number }[];
   rpcBudget?: () => { usedToday: number; remaining: number };
+  /** Label shown in the top bar: PAPER, or PAPER EXPLORE. */
+  mode?: string;
   now: () => number;
 }
 
@@ -116,7 +118,11 @@ export function dashboardState(d: DashboardDeps) {
 
   const events = q<{ at: number; mint: string; strategy: string; action: string; reasons: string }>("SELECT at, mint, strategy, action, reasons FROM decisions WHERE action != 'SNAPSHOT' ORDER BY at DESC LIMIT 20").map((e) => ({ ...e, reasons: JSON.parse(e.reasons) as string[] }));
 
-  const passed = q<{ mint: string; at: number; stage: string | null; total_cost_bps: number | null; liquidity_usd_reported: number | null }>("SELECT mint, MAX(at) at, stage, total_cost_bps, liquidity_usd_reported FROM assessments WHERE verdict='PASS' AND at >= ? GROUP BY mint ORDER BY at DESC LIMIT 12", now - 24 * 3_600_000);
+  // Last PASS per token in 24 h, plus what its newest check says (a token can pass, then fail a re-check minutes later).
+  const passed = q<{ mint: string; at: number; stage: string | null; total_cost_bps: number | null; liquidity_usd_reported: number | null }>("SELECT mint, MAX(at) at, stage, total_cost_bps, liquidity_usd_reported FROM assessments WHERE verdict='PASS' AND at >= ? GROUP BY mint ORDER BY at DESC LIMIT 12", now - 24 * 3_600_000).map((p) => {
+    const latest = one<{ verdict: string; at: number }>("SELECT verdict, at FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1", p.mint);
+    return { ...p, nowVerdict: latest?.verdict ?? "PASS", nowAt: latest?.at ?? p.at };
+  });
 
   const watchlist = d.watched?.() ?? [];
   const shownMints = [...recentTokens, ...rejections, ...eligible, ...open, ...watchlist, ...events, ...passed].map((x) => x.mint);
@@ -132,7 +138,7 @@ export function dashboardState(d: DashboardDeps) {
     meta,
     passedRecently: passed,
     now,
-    mode: "PAPER",
+    mode: d.mode ?? "PAPER",
     liveTradingEnabled: LIVE_TRADING_ENABLED,
     version: SOFTWARE_VERSION,
     lastUpdate,

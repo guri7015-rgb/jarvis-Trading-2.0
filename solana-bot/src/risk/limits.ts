@@ -45,6 +45,19 @@ export const DEFAULT_LIMITS: RiskLimits = {
   maxAssessmentAgeMs: 2 * 60_000,
 };
 
+/**
+ * Explore mode (paper only). Every MONEY cap is identical to the defaults:
+ * same position size, same loss per trade, same daily loss, same entry count.
+ * Only the two edge floors are lowered so that paper fills actually happen and
+ * the fill-versus-quote gap, failure rate and stress allowance can be measured.
+ * Trades made under these limits never count toward live eligibility.
+ */
+export const EXPLORE_LIMITS: RiskLimits = {
+  ...DEFAULT_LIMITS,
+  minEdgeOverBreakEvenPct: 0,
+  minRewardToRisk: 1.0,
+};
+
 /** For each limit: does a bigger number mean more risk? */
 const HIGHER_IS_LOOSER: Record<keyof RiskLimits, boolean> = {
   referenceEquityCad: true,

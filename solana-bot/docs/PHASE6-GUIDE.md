@@ -19,6 +19,23 @@ Phase 6 is mostly waiting and recording. The tooling is built; the evidence isn'
    - `npm run evidence`: whether any strategy meets the live-eligibility bar. Expect NOT ELIGIBLE for a long time.
 4. **After there's enough tape** (days, many tokens): `npm run tune`. It searches a small grid on the train window and scores on validation. If something is positive on both with at least 20 trades each, it writes `data/strategy-params.candidate.json`. Nothing changes until that file is reviewed and renamed to `strategy-params.json`. Then the bot logs the file's hash at start, so every decision is traceable to a known parameter set. The test window is looked at once, at the end, with `npm run backtest`.
 
+## Explore mode: making paper positions happen
+
+Under the default rules no strategy has opened a paper position, because nothing clears the cost bar. That is a real result, but it leaves the execution side unmeasured: how far fills land from the quote, how often a simulated sell fails, whether the 2% stress allowance is right. Explore mode exists for that.
+
+```bash
+caffeinate -i npm run discover -- --assess --signals --paper --explore --dashboard
+```
+
+What it changes, all paper:
+- Entry edge floors: reward-to-risk 1.0 instead of 1.5, no minimum edge over break-even.
+- Strategy thresholds: looser A, B and C entry rules (`EXPLORE_PARAMS`). D, the veto, is unchanged.
+- Data quality: 10 trades in 3 minutes instead of 20, a minute of silence allowed instead of 30 s.
+
+What it does not change: position size, loss per trade, daily loss, entries per day, one position at a time, the losing-streak cool-down, the stress allowance, every token safety gate.
+
+Positions are stored under mode `paper_explore`. `npm run evidence` reports them on one line and excludes them from eligibility. Expect them to lose money on average; the point is the fill data, not the P&L.
+
 ## What has to be true before Phase 7
 
 - At least one strategy with 100+ resolved forward-paper trades, positive expectancy after costs that survives fills 1% worse, a 95% lower bound above zero, drawdown and largest loss inside limits, spread over 5+ days. `npm run evidence` checks all of it.

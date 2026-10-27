@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { parseTradeLogs } from "../src/market/eventDecoder.ts";
-import { DEFAULT_LIMITS, loadRiskLimits } from "../src/risk/limits.ts";
+import { DEFAULT_LIMITS, EXPLORE_LIMITS, loadRiskLimits } from "../src/risk/limits.ts";
 import { decideEntry, type RiskInput } from "../src/risk/manager.ts";
 import { RiskStateStore } from "../src/risk/riskState.ts";
 import { decodePumpSwapPool } from "../src/solana/pumpSwapPool.ts";
@@ -247,6 +247,15 @@ describe("risk manager", () => {
     expect(fail({ ...base(), state: { ...st, realizedLossCad: 8 } })).toBe("PORTFOLIO");
     expect(fail({ ...base(), state: { ...st, haltedReason: "kill switch" } })).toBe("PORTFOLIO");
     expect(fail({ ...base(), limitsRefused: ["maxPositionCad"] })).toBe("PORTFOLIO");
+  });
+});
+
+describe("explore limits", () => {
+  it("keep every money cap identical to the defaults and only lower the two edge floors", () => {
+    const money: (keyof typeof DEFAULT_LIMITS)[] = ["referenceEquityCad", "maxPositionCad", "minPositionCad", "maxLossPerTradeCad", "dailyLossLimitCad", "maxEntriesPerDay", "maxOpenPositions", "maxConsecutiveLosses", "stressPct", "maxAssessmentAgeMs"];
+    for (const k of money) expect(EXPLORE_LIMITS[k]).toBe(DEFAULT_LIMITS[k]);
+    expect(EXPLORE_LIMITS.minRewardToRisk).toBeLessThan(DEFAULT_LIMITS.minRewardToRisk);
+    expect(EXPLORE_LIMITS.minEdgeOverBreakEvenPct).toBeLessThan(DEFAULT_LIMITS.minEdgeOverBreakEvenPct);
   });
 });
 

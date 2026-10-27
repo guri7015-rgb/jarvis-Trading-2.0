@@ -27,6 +27,21 @@ export interface StrategyParams {
 
 export const DEFAULT_PARAMS: StrategyParams = { A: { ...A_PARAMS }, B: { ...B_PARAMS }, C: { ...C_PARAMS }, D: { ...D_PARAMS } };
 
+/**
+ * Explore-mode parameters (paper only): the same shapes with looser entry
+ * thresholds so setups fire often enough to measure execution. D (the veto)
+ * is unchanged. Nothing here is a tuned result.
+ */
+export const EXPLORE_PARAMS: StrategyParams = {
+  A: { ...A_PARAMS, minImpulsePct: 0.05, maxConsolidationRangePct: 0.1, minBuyers60: 5, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, maxExtensionPct: 0.05, targetImpulseFraction: 0.8 },
+  B: { ...B_PARAMS, minRangeTrades: 10, minBreakoutPct: 0.01, minRateAccel: 1.5, minBuyers60: 5, maxTopBuyerShare: 0.4, targetRangeFraction: 0.8 },
+  C: { ...C_PARAMS, minTrades30: 6, minRateAccel: 1.5, minNewBuyers30: 4, minImbalance60: 0.2, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, minRet60: 0.02, targetPct: 0.15 },
+  D: { ...D_PARAMS },
+};
+
+/** Explore-mode data quality: half the trades, a minute of silence allowed. Lag and gap rules unchanged. */
+export const EXPLORE_QUALITY = { minTrades180s: 10, maxSecondsSinceLastTrade: 60, maxMedianLagS: 10, blockingGapMs: 2_000 };
+
 const numRecord = (template: Record<string, number>) => z.object(Object.fromEntries(Object.keys(template).map((k) => [k, z.number().finite().optional()]))).strict();
 const FileSchema = z
   .object({ A: numRecord(A_PARAMS).optional(), B: numRecord(B_PARAMS).optional(), C: numRecord(C_PARAMS).optional(), D: numRecord(D_PARAMS).optional(), note: z.string().max(500).optional() })

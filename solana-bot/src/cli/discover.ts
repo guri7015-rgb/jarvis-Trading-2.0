@@ -17,18 +17,18 @@ import { describeRpc, LIVE_TRADING_ENABLED, loadConfig } from "../core/config.ts
 import { resolve } from "node:path";
 import { TokenRegistry } from "../discovery/registry.ts";
 import { TradeStream } from "../market/tradeStream.ts";
-import { loadRiskLimits } from "../risk/limits.ts";
+import { EXPLORE_LIMITS, loadRiskLimits } from "../risk/limits.ts";
 import { RiskStateStore } from "../risk/riskState.ts";
 import { SessionStore } from "../storage/sessions.ts";
 import { SignalEngine } from "../strategy/engine.ts";
-import { Ledger } from "../paper/ledger.ts";
+import { Ledger, type Mode } from "../paper/ledger.ts";
 import { CONSERVATIVE_SIM, PaperExecutor } from "../paper/executor.ts";
 import { PaperTrader } from "../paper/trader.ts";
 import { FxService } from "../market/fx.ts";
 import { QuoteClient } from "../market/quotes.ts";
 import { DEFAULT_POLICY } from "../risk/policy.ts";
 import { priorityEstimate } from "../risk/costs.ts";
-import { loadStrategyParams } from "../strategy/params.ts";
+import { EXPLORE_PARAMS, EXPLORE_QUALITY, loadStrategyParams } from "../strategy/params.ts";
 import { startDashboard } from "../dashboard/server.ts";
 import { dashboardState, shownMints } from "../dashboard/state.ts";
 import { TokenMetaService } from "../discovery/tokenMeta.ts";
@@ -51,8 +51,18 @@ let stream: TradeStream | undefined;
 let paperLedger: Ledger | undefined;
 let dashboard: Server | undefined;
 let paperTrader: PaperTrader | undefined;
-const strategyParams = loadStrategyParams(resolve(cfg.DATA_DIR, "strategy-params.json"));
+// --explore: paper only, same money caps, looser entry rules so fills happen and execution can be measured.
+// Positions are stored under mode "paper_explore" and never count toward live eligibility.
+const explore = args.includes("--explore");
+const paperMode: Mode = explore ? "paper_explore" : "paper";
+const strategyParamsFile = loadStrategyParams(resolve(cfg.DATA_DIR, "strategy-params.json"));
+const strategyParams = explore && strategyParamsFile.source === "defaults" ? { params: EXPLORE_PARAMS, source: "explore" as const, sha256: undefined, overridden: [] as string[] } : strategyParamsFile;
 let riskLimits = loadRiskLimits(resolve(cfg.DATA_DIR, "risk-limits.json"), resolve(cfg.DATA_DIR, "risk-limits.confirmed"));
+if (explore) {
+  if (!args.includes("--paper")) throw new Error("--explore needs --paper");
+  riskLimits = { ...riskLimits, limits: { ...riskLimits.limits, minEdgeOverBreakEvenPct: EXPLORE_LIMITS.minEdgeOverBreakEvenPct, minRewardToRisk: EXPLORE_LIMITS.minRewardToRisk } };
+  deps.logger.warn("EXPLORE MODE: looser entry rules, paper only; these trades never count toward live eligibility", { minRewardToRisk: riskLimits.limits.minRewardToRisk, minEdgeOverBreakEvenPct: riskLimits.limits.minEdgeOverBreakEvenPct, maxPositionCad: riskLimits.limits.maxPositionCad, dailyLossLimitCad: riskLimits.limits.dailyLossLimitCad });
+}
 if (args.includes("--signals")) {
   if (!assess) throw new Error("--signals needs --assess (the watchlist comes from gate assessments)");
   const lim = riskLimits;
@@ -72,7 +82,7 @@ if (args.includes("--signals")) {
   if (args.includes("--paper")) {
     const fx = new FxService(deps.http, () => deps.clock.now(), { maxUsdCadAgeDays: 5, solUsdCacheMs: 60_000, usdCadCacheMs: 6 * 3_600_000, apiKey: cfg.JUPITER_API_KEY });
     const quotes = new QuoteClient(deps.http, () => deps.clock.now(), cfg.JUPITER_API_KEY);
-    const ledger = new Ledger(deps.db, () => deps.clock.now());
+    const ledger = new Ledger(deps.db, () => deps.clock.now(), paperMode);
     const riskState = new RiskStateStore(deps.db, () => deps.clock.now());
     // Live priority-fee estimate (median of recent non-zero fees, capped), refreshed every 30 s.
     // Until the first sample arrives, budget for the cap rather than for zero.
@@ -110,6 +120,7 @@ if (args.includes("--signals")) {
   deps.logger.info("strategy params", { source: strategyParams.source, sha256: strategyParams.sha256, overridden: strategyParams.overridden });
   engine = new SignalEngine({
     params: strategyParams.params,
+    quality: explore ? EXPLORE_QUALITY : undefined,
     trader: paper?.trader,
     ledger: paper?.ledger,
     fx: paper?.fx,
@@ -139,7 +150,7 @@ function age(ms?: number): string {
 function printStatus(): void {
   const s = svc.status();
   const lines: string[] = [];
-  lines.push(`\n=== discovery ${new Date(s.now).toISOString()}  mode=PAPER-RESEARCH live=${LIVE_TRADING_ENABLED ? "ON" : "OFF"} ===`);
+  lines.push(`\n=== discovery ${new Date(s.now).toISOString()}  mode=${explore ? "PAPER-EXPLORE" : "PAPER-RESEARCH"} live=${LIVE_TRADING_ENABLED ? "ON" : "OFF"} ===`);
   lines.push(`gate: ${s.gate.open ? "OPEN" : "CLOSED"}${s.gate.reasons.length ? "  (" + s.gate.reasons.join("; ") + ")" : ""}`);
   for (const h of s.health) {
     if (h.provider === "dexscreener") continue;

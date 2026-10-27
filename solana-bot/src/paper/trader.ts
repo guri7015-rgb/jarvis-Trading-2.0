@@ -40,6 +40,8 @@ export interface TraderDeps {
   /** Strategy D parameters for exit checks. */
   dParams?: typeof D_PARAMS;
   onAlert?: (msg: string, ctx: Record<string, unknown>) => void;
+  /** Hard cap re-checked at the moment of entry, whatever the risk decision said earlier. Default 1. */
+  maxOpenPositions?: number;
 }
 
 export interface EntryRequest {
@@ -72,6 +74,13 @@ export class PaperTrader {
     if (!d.approved || d.sizeCad === undefined || d.plannedLossCad === undefined) return undefined;
     const s = req.signal;
     if (s.invalidationPrice === undefined || s.targetPrice === undefined || s.timeStopMs === undefined) return undefined;
+    // Last line of defence: the decision was made against a snapshot; the ledger is the truth now.
+    const open = this.d.ledger.open().length;
+    const pending = this.d.ledger.pending().length;
+    if (open >= (this.d.maxOpenPositions ?? 1) || pending > 0) {
+      this.d.logger.warn("entry refused at execution: position limit", { mint: req.mint, open, pending });
+      return undefined;
+    }
     const id = `${req.mint.slice(0, 8)}-${s.strategy}-${this.d.clock.now()}`;
     const size = BigInt(Math.floor((d.sizeCad / req.fx.solCad) * 1e9));
     const breakout = s.strategy.startsWith("B_") ? s.maxEntryPrice : undefined;

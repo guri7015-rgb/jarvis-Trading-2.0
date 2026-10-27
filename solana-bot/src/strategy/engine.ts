@@ -24,7 +24,7 @@ import { MINTS, PROGRAMS } from "../solana/programs.ts";
 import { decodeBondingCurve } from "../solana/pumpCurve.ts";
 import { decodePumpSwapPool } from "../solana/pumpSwapPool.ts";
 import type { SolanaRpc } from "../solana/rpc.ts";
-import { computeFeatures, type Features, type Trade } from "./features.ts";
+import { computeFeatures, DEFAULT_QUALITY, type Features, type QualityRules, type Trade } from "./features.ts";
 import { strategyA } from "./strategyA.ts";
 import { strategyB } from "./strategyB.ts";
 import { strategyC } from "./strategyC.ts";
@@ -58,6 +58,8 @@ export interface EngineDeps {
   haltReason?: () => string | null;
   /** Strategy parameters (defaults, or a reviewed file). */
   params?: StrategyParams;
+  /** Data-quality rules for features (defaults, or the explore set). */
+  quality?: QualityRules;
 }
 
 interface Watched {
@@ -286,6 +288,18 @@ export class SignalEngine {
       const t = this.d.registry.get(r.mint);
       const w = this.watch.get(r.mint);
       if (!t || !w) continue;
+      // The decisions above were all made against one snapshot of the portfolio.
+      // Re-check the portfolio limits right before each entry so two approvals in
+      // the same tick cannot both open (one position, one unresolved order, N entries a day).
+      const L = this.d.limits;
+      const day = this.d.riskState.today();
+      const room = this.ledgerOpen().length < L.maxOpenPositions && (this.d.ledger?.pending().length ?? 0) === 0 && day.entries < L.maxEntriesPerDay && !day.haltedReason;
+      if (!room) {
+        this.record(this.d.clock.now(), r.mint, r.signal.strategy, "REJECT", ["PORTFOLIO: limit reached by an entry earlier in this tick"], r.signal, r.decision);
+        this.stats.approved--;
+        this.stats.rejected++;
+        continue;
+      }
       const f = features.get(r.mint);
       const pos = await trader.enter({
         mint: r.mint,
@@ -324,7 +338,7 @@ export class SignalEngine {
     const mints = new Set([...this.watch.keys(), ...openPositions.map((p) => p.mint)]);
     for (const mint of mints) {
       const w = this.watch.get(mint);
-      const f = computeFeatures(mint, this.loadTrades(mint, now - 300_000), now, this.gaps(now - 300_000));
+      const f = computeFeatures(mint, this.loadTrades(mint, now - 300_000), now, this.gaps(now - 300_000), this.d.quality ?? DEFAULT_QUALITY);
       featuresByMint.set(mint, f);
       if (!w) continue;
       const t = this.d.registry.get(mint);

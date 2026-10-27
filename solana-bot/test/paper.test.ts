@@ -139,6 +139,16 @@ describe("PaperTrader", () => {
     expect(ledger.open()).toHaveLength(1);
   });
 
+  it("refuses a second entry while one is open, even with two approved decisions in the same tick", async () => {
+    const { trader, ledger, riskState } = setup();
+    const first = await trader.enter(req());
+    expect(first?.state).toBe("OPEN");
+    const second = await trader.enter(req({ mint: MINTS.USDC }));
+    expect(second).toBeUndefined();
+    expect(ledger.open()).toHaveLength(1);
+    expect(riskState.today().entries).toBe(1);
+  });
+
   it("a failed entry is FAILED, pays fees, and counts as a (tiny) loss", async () => {
     const { trader, riskState } = setup({ failureRate: 1 });
     const p = await trader.enter(req());
