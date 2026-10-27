@@ -34,6 +34,8 @@ export interface RiskPolicy {
   maxPriorityMicroLamports: number;
   /** Cool-down before a rejected token is looked at again. */
   recheckAfterMarketRejectMs: number;
+  /** A PASS goes stale for entries after maxAssessmentAgeMs (2 min), so re-check sooner than that. */
+  recheckAfterPassMs: number;
   recheckAfterStructuralRejectMs: number;
   /** Rejects caused only by missing data (rate limits, outages) are retried sooner. */
   recheckAfterDataRejectMs: number;
@@ -74,6 +76,7 @@ export const DEFAULT_POLICY: RiskPolicy = {
   assumedComputeUnits: 200_000,
   maxPriorityMicroLamports: 2_000_000,
   recheckAfterMarketRejectMs: 10 * 60_000,
+  recheckAfterPassMs: 90_000,
   recheckAfterStructuralRejectMs: 24 * 3_600_000,
   recheckAfterDataRejectMs: 2 * 60_000,
   minCurveRealSolMultiple: 5,

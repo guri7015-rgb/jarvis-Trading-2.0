@@ -128,7 +128,7 @@ export function evaluateGate(i: GateInput, p: RiskPolicy): GateResult {
 
 /** How long before a rejected token is looked at again: the longest wait any failed rule asks for. */
 export function recheckDelayMs(r: GateResult, p: RiskPolicy): number {
-  if (r.verdict === "PASS") return p.recheckAfterMarketRejectMs;
+  if (r.verdict === "PASS") return p.recheckAfterPassMs;
   if (r.rejects.some((f) => f.kind === "structural")) return p.recheckAfterStructuralRejectMs;
   if (r.rejects.some((f) => f.kind === "market")) return p.recheckAfterMarketRejectMs;
   return p.recheckAfterDataRejectMs;

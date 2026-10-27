@@ -333,6 +333,7 @@ export class SignalEngine {
   }
 
   private lastDrillAt = 0;
+  private lastDrillSkipAt = 0;
 
   /**
    * Drill entry: no setup required. Every `drillEveryMs`, if no position is open,
@@ -349,7 +350,18 @@ export class SignalEngine {
       .filter((c) => c.a && c.a.verdict === "PASS" && now - c.a.at <= this.d.limits.maxAssessmentAgeMs && c.a.totalCostBps !== null && c.f?.last)
       .sort((x, y) => x.a!.totalCostBps! - y.a!.totalCostBps!);
     const c = candidates[0];
-    if (!c) return;
+    if (!c) {
+      // Say why on the dashboard, once a minute at most.
+      if (now - this.lastDrillSkipAt >= 60_000) {
+        this.lastDrillSkipAt = now;
+        const why = [...this.watch.keys()].map((m) => {
+          const a = this.assessment(m);
+          return `${m.slice(0, 4)}: ${!a ? "no check yet" : a.verdict !== "PASS" ? "last check REJECT" : now - a.at > this.d.limits.maxAssessmentAgeMs ? `check ${Math.round((now - a.at) / 1000)}s old` : a.totalCostBps === null ? "no cost" : "no trades seen"}`;
+        });
+        this.record(now, "-", "DRILL", "REJECT", [this.watch.size ? `no watched coin ready: ${why.join(", ")}` : "nothing on the watchlist"]);
+      }
+      return;
+    }
     this.lastDrillAt = now;
     const last = c.f!.last!;
     const signal: Signal = {
