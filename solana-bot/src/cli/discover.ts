@@ -54,6 +54,15 @@ let paperTrader: PaperTrader | undefined;
 // --explore: paper only, same money caps, looser entry rules so fills happen and execution can be measured.
 // Positions are stored under mode "paper_explore" and never count toward live eligibility.
 const drill = args.includes("--drill");
+// --drill-every <seconds> (min 15) and --drill-hold <seconds> (min 30) for a burst test.
+const numArg = (k: string, d: number, min: number) => {
+  const i = args.indexOf(k);
+  const v = i >= 0 ? Number(args[i + 1]) : d;
+  if (!Number.isFinite(v)) throw new Error(`${k} needs a number of seconds`);
+  return Math.max(min, v) * 1000;
+};
+const drillEveryMs = numArg("--drill-every", 300, 15);
+const drillHoldMs = numArg("--drill-hold", 600, 30);
 const explore = args.includes("--explore") || drill;
 const paperMode: Mode = drill ? "paper_drill" : explore ? "paper_explore" : "paper";
 const strategyParamsFile = loadStrategyParams(resolve(cfg.DATA_DIR, "strategy-params.json"));
@@ -66,7 +75,7 @@ if (explore) {
 }
 if (drill) {
   riskLimits = { ...riskLimits, limits: { ...DRILL_LIMITS } };
-  deps.logger.warn("DRILL MODE: a forced paper entry every 5 minutes, no strategy; paper only; never counts toward live eligibility", { maxPositionCad: DRILL_LIMITS.maxPositionCad, maxLossPerTradeCad: DRILL_LIMITS.maxLossPerTradeCad, dailyLossLimitCad: DRILL_LIMITS.dailyLossLimitCad });
+  deps.logger.warn(`DRILL MODE: a forced paper entry every ${drillEveryMs / 1000}s held up to ${drillHoldMs / 1000}s, no strategy; paper only; never counts toward live eligibility`, { maxPositionCad: DRILL_LIMITS.maxPositionCad, maxLossPerTradeCad: DRILL_LIMITS.maxLossPerTradeCad, dailyLossLimitCad: DRILL_LIMITS.dailyLossLimitCad });
 }
 if (args.includes("--signals")) {
   if (!assess) throw new Error("--signals needs --assess (the watchlist comes from gate assessments)");
@@ -129,7 +138,8 @@ if (args.includes("--signals")) {
     params: strategyParams.params,
     quality: explore ? EXPLORE_QUALITY : undefined,
     maxWatch: explore ? MAX_WATCH_EXPLORE : undefined,
-    drillEveryMs: drill ? 5 * 60_000 : undefined,
+    drillEveryMs: drill ? drillEveryMs : undefined,
+    drillHoldMs: drill ? drillHoldMs : undefined,
     trader: paper?.trader,
     ledger: paper?.ledger,
     fx: paper?.fx,

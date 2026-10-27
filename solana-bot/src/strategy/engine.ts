@@ -64,6 +64,8 @@ export interface EngineDeps {
   maxWatch?: number;
   /** Drill: force a paper entry on the cheapest fresh-PASS watched coin every this many ms when nothing is open. */
   drillEveryMs?: number;
+  /** Drill: time stop for each forced position. Default 10 minutes. */
+  drillHoldMs?: number;
 }
 
 interface Watched {
@@ -374,7 +376,7 @@ export class SignalEngine {
       invalidationPrice: last * 0.95,
       targetPrice: last * 1.08,
       expectedMovePct: 0.08,
-      timeStopMs: 10 * 60_000,
+      timeStopMs: this.d.drillHoldMs ?? 10 * 60_000,
       cooldownMs: this.d.drillEveryMs!,
     };
     const gate = this.d.health.gate();
