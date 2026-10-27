@@ -23,13 +23,16 @@ const MIN_DAYS = 5;
 const cfg = loadConfig();
 const db = openDb(resolve(cfg.DATA_DIR, "solana-bot.sqlite"));
 // Only mode 'paper' counts. Explore-mode positions ran under looser entry rules and are reported separately.
-const rows = db.prepare("SELECT strategy, state, opened_at, closed_at, cost_basis_lamports, proceeds_lamports, realized_pnl_lamports, realized_pnl_cad, sol_cad_at_entry FROM positions WHERE mode = 'paper' AND state IN ('CLOSED','FAILED','STUCK')").all() as {
+// --imported: analyse positions imported from another machine's tape (mode "imported:paper") instead of this machine's.
+const imported = process.argv.includes("--imported");
+const modeOf = (m: string) => (imported ? `imported:${m}` : m);
+const rows = db.prepare("SELECT strategy, state, opened_at, closed_at, cost_basis_lamports, proceeds_lamports, realized_pnl_lamports, realized_pnl_cad, sol_cad_at_entry FROM positions WHERE mode = ? AND state IN ('CLOSED','FAILED','STUCK')").all(modeOf("paper")) as {
   strategy: string; state: string; opened_at: number | null; closed_at: number | null; cost_basis_lamports: string; proceeds_lamports: string; realized_pnl_lamports: string | null; realized_pnl_cad: number | null; sol_cad_at_entry: number | null;
 }[];
-const explore = db.prepare("SELECT COUNT(*) n, SUM(state='FAILED') failed, SUM(realized_pnl_cad) pnl FROM positions WHERE mode = 'paper_explore' AND state IN ('CLOSED','FAILED','STUCK')").get() as { n: number; failed: number | null; pnl: number | null };
-const drill = db.prepare("SELECT COUNT(*) n, SUM(state='FAILED') failed, SUM(realized_pnl_cad) pnl FROM positions WHERE mode = 'paper_drill' AND state IN ('CLOSED','FAILED','STUCK')").get() as { n: number; failed: number | null; pnl: number | null };
+const explore = db.prepare("SELECT COUNT(*) n, SUM(state='FAILED') failed, SUM(realized_pnl_cad) pnl FROM positions WHERE mode = ? AND state IN ('CLOSED','FAILED','STUCK')").get(modeOf("paper_explore")) as { n: number; failed: number | null; pnl: number | null };
+const drill = db.prepare("SELECT COUNT(*) n, SUM(state='FAILED') failed, SUM(realized_pnl_cad) pnl FROM positions WHERE mode = ? AND state IN ('CLOSED','FAILED','STUCK')").get(modeOf("paper_drill")) as { n: number; failed: number | null; pnl: number | null };
 
-const out: string[] = [`# Promotion evidence — ${rows.length} resolved paper positions — ${new Date().toISOString()}`];
+const out: string[] = [`# Promotion evidence — ${rows.length} resolved paper positions${imported ? " (imported tape)" : ""} — ${new Date().toISOString()}`];
 if (drill.n) out.push(`\nDrill mode: ${drill.n} forced entries (${drill.failed ?? 0} failed), net ${(drill.pnl ?? 0) >= 0 ? "+" : ""}CAD ${(drill.pnl ?? 0).toFixed(2)}. No strategy; NOT counted below.`);
 if (explore.n) out.push(`\nExplore mode: ${explore.n} resolved positions (${explore.failed ?? 0} failed entries), net ${(explore.pnl ?? 0) >= 0 ? "+" : ""}CAD ${(explore.pnl ?? 0).toFixed(2)}. Looser entry rules; NOT counted below.`);
 const byStrategy = new Map<string, typeof rows>();

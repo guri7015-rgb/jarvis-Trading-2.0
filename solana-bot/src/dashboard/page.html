@@ -91,6 +91,11 @@
     <div class="kpis" id="pnl"></div>
   </div>
 
+  <div class="card">
+    <h2>Performance (this mode, all time)</h2>
+    <div class="kpis" id="perf"></div>
+  </div>
+
   <div class="card c8">
     <h2>Open positions <span class="count" id="posCount">0</span></h2>
     <div class="scroll"><table id="positions"></table></div>
@@ -201,6 +206,19 @@ function render(s) {
     ["Drawdown today", `${sol(r.drawdownTodaySol)} SOL`, "", r.drawdownTodaySol > 0 ? "neg" : ""],
     ["Loss budget left today", cad(r.lossBudgetLeftCad), `of CAD ${r.limits.dailyLossLimitCad}`, r.lossBudgetLeftCad <= 0 ? "neg" : ""],
     ["Max position", `CAD ${r.limits.maxPositionCad}`, `${r.limits.maxEntriesPerDay} entries a day, ${r.limits.maxOpenPositions} open`, ""],
+  ].map(([k, v, sub, c]) => `<div class="kpi"><div class="k">${esc(k)}</div><div class="v ${c}">${esc(v)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>`).join("");
+
+  const pf = s.performance;
+  const pct = (x) => x === null || x === undefined ? "–" : (x * 100).toFixed(0) + "%";
+  $("perf").innerHTML = [
+    ["Closed trades", String(pf.closed), `${pf.failedEntries} failed entries`, ""],
+    ["Win rate", pct(pf.winRate), pf.closed ? "" : "no trades yet", ""],
+    ["Average winner", cad(pf.avgWinCad), "", pf.avgWinCad ? "pos" : ""],
+    ["Average loser", cad(pf.avgLossCad), "", pf.avgLossCad ? "neg" : ""],
+    ["Net", cad(pf.netCad), "", sign(pf.netCad)],
+    ["Average hold", pf.avgHoldS === null ? "–" : pf.avgHoldS < 90 ? Math.round(pf.avgHoldS) + " s" : Math.round(pf.avgHoldS / 60) + " min", "", ""],
+    ["Fill vs quote", pf.avgFillSlipBps === null ? "–" : (pf.avgFillSlipBps / 100).toFixed(2) + "%", `${pf.orders} orders, ${pf.failedOrders} failed`, ""],
+    ["Simulated delay", pf.avgLatencyMs === null ? "–" : (pf.avgLatencyMs / 1000).toFixed(1) + " s", pf.avgQuoteImpactPct === null ? "" : `quote impact ${pf.avgQuoteImpactPct.toFixed(2)}%`, ""],
   ].map(([k, v, sub, c]) => `<div class="kpi"><div class="k">${esc(k)}</div><div class="v ${c}">${esc(v)}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>`).join("");
 
   $("posCount").textContent = s.positions.length;

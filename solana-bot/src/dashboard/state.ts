@@ -104,6 +104,38 @@ export function dashboardState(d: DashboardDeps) {
   }
   const staleQuotes = one<{ n: number }>("SELECT COUNT(*) n FROM assessments WHERE at >= ? AND (rejects LIKE '%QUOTE_STALE%' OR rejects LIKE '%QUOTE_GAP%')", now - 3_600_000)?.n ?? 0;
 
+  // Performance of this mode's resolved positions, and how simulated fills compared with their quotes.
+  const mode = d.ledger ? (d.mode ?? "PAPER").toLowerCase().replace(" ", "_") : "paper";
+  const perf = one<{ n: number; wins: number; losses: number; avg_win: number | null; avg_loss: number | null; avg_hold_s: number | null; pnl: number | null; failed: number }>(
+    `SELECT COUNT(*) n, SUM(realized_pnl_cad > 0) wins, SUM(realized_pnl_cad < 0) losses,
+            AVG(CASE WHEN realized_pnl_cad > 0 THEN realized_pnl_cad END) avg_win,
+            AVG(CASE WHEN realized_pnl_cad < 0 THEN realized_pnl_cad END) avg_loss,
+            AVG(CASE WHEN opened_at IS NOT NULL AND closed_at IS NOT NULL THEN (closed_at - opened_at) / 1000.0 END) avg_hold_s,
+            SUM(realized_pnl_cad) pnl, SUM(state = 'FAILED') failed
+       FROM positions WHERE mode = ? AND state IN ('CLOSED','FAILED')`,
+    mode,
+  );
+  const fills = one<{ n: number; failed: number; avg_slip_bps: number | null; avg_latency_ms: number | null; avg_quote_impact: number | null }>(
+    `SELECT COUNT(*) n, SUM(o.state = 'FAILED') failed, AVG(o.slippage_bps) avg_slip_bps, AVG(o.sim_latency_ms) avg_latency_ms, AVG(o.quote_impact_pct) avg_quote_impact
+       FROM orders o JOIN positions p ON p.id = o.position_id WHERE p.mode = ?`,
+    mode,
+  );
+  const performance = {
+    closed: perf?.n ?? 0,
+    failedEntries: perf?.failed ?? 0,
+    winRate: perf && perf.n ? (perf.wins ?? 0) / perf.n : null,
+    avgWinCad: perf?.avg_win ?? null,
+    avgLossCad: perf?.avg_loss ?? null,
+    avgHoldS: perf?.avg_hold_s ?? null,
+    netCad: perf?.pnl ?? null,
+    orders: fills?.n ?? 0,
+    failedOrders: fills?.failed ?? 0,
+    /** Simulated fill versus its own quote, in basis points (what the stress allowance is meant to cover). */
+    avgFillSlipBps: fills?.avg_slip_bps ?? null,
+    avgLatencyMs: fills?.avg_latency_ms ?? null,
+    avgQuoteImpactPct: fills?.avg_quote_impact ?? null,
+  };
+
   const breakers = [
     { name: "Live trading", state: LIVE_TRADING_ENABLED ? "ON" : "OFF (hard-coded)", ok: !LIVE_TRADING_ENABLED },
     { name: "Manual halt", state: day.haltedReason ? `HALTED: ${day.haltedReason}` : "clear", ok: !day.haltedReason },
@@ -155,6 +187,7 @@ export function dashboardState(d: DashboardDeps) {
   return {
     meta,
     review,
+    performance,
     now,
     mode: d.mode ?? "PAPER",
     liveTradingEnabled: LIVE_TRADING_ENABLED,

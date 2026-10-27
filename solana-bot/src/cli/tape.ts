@@ -43,21 +43,42 @@ if (cmd === "export") {
 } else if (cmd === "import" && args[1]) {
   const file = resolve(process.cwd(), args[1]);
   if (!existsSync(file)) throw new Error(`no such file: ${file}`);
-  const payload = JSON.parse(gunzipSync(readFileSync(file)).toString()) as Record<string, Record<string, unknown>[]> & { version: number };
-  if (payload.version !== 1) throw new Error(`unknown tape version ${payload.version}`);
+  // A tape is a file from another machine: treat it as data, never as SQL.
+  //  - decompressed size is capped
+  //  - every column name must exist in the real table (the file's keys never reach the SQL text)
+  //  - values must be plain scalars
+  //  - positions and orders are re-labelled mode "imported:<mode>" so this machine's trader
+  //    never manages them and they never count as this machine's paper account
+  const MAX_BYTES = 256 * 1024 * 1024;
+  const MAX_ROWS = 2_000_000;
+  const raw = gunzipSync(readFileSync(file), { maxOutputLength: MAX_BYTES });
+  const payload = JSON.parse(raw.toString()) as Record<string, unknown> & { version: number };
+  if (payload.version !== 1) throw new Error(`unknown tape version ${String(payload.version)}`);
   const counts: Record<string, number> = {};
   tx(db, () => {
     for (const t of TABLES) {
-      const rows = payload[t] ?? [];
-      if (!rows.length) continue;
-      const cols = Object.keys(rows[0]!);
+      const rows = payload[t];
+      if (!Array.isArray(rows) || !rows.length) continue;
+      if (rows.length > MAX_ROWS) throw new Error(`tape table ${t} has ${rows.length} rows; refusing`);
+      const real = new Set((db.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name));
+      const cols = Object.keys(rows[0] as object).filter((c) => real.has(c));
+      if (!cols.length) continue;
       const stmt = db.prepare(`INSERT OR IGNORE INTO ${t} (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`);
       let n = 0;
-      for (const r of rows) n += Number(stmt.run(...cols.map((c) => r[c] as string | number | null)).changes);
+      for (const r of rows as Record<string, unknown>[]) {
+        const vals = cols.map((c) => {
+          let v = r[c];
+          if ((t === "positions" || t === "orders") && c === "mode" && typeof v === "string" && !v.startsWith("imported:")) v = `imported:${v}`;
+          if (v === undefined) v = null;
+          if (v !== null && typeof v !== "string" && typeof v !== "number") throw new Error(`tape ${t}.${c}: unexpected value type ${typeof v}`);
+          return v as string | number | null;
+        });
+        n += Number(stmt.run(...vals).changes);
+      }
       counts[t] = n;
     }
   });
-  process.stdout.write(`imported ${JSON.stringify(counts)} new rows from ${args[1]}\n`);
+  process.stdout.write(`imported ${JSON.stringify(counts)} new rows from ${args[1]}\nPositions and orders are labelled mode "imported:<mode>": analysed with npm run evidence -- --imported, never managed here.\n`);
 } else {
   process.stdout.write("usage: npm run tape -- export | import <file.json.gz>\n");
 }
