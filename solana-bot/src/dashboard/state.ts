@@ -29,7 +29,7 @@ export interface DashboardDeps {
 
 /** Every mint the page shows, so logos can be looked up for exactly those. */
 export function shownMints(s: ReturnType<typeof dashboardState>): string[] {
-  return [...new Set([...s.tokens.recent, ...s.assessments.recentRejections, ...s.signals, ...s.positions, ...s.watchlist, ...s.events, ...s.passedRecently].map((x) => x.mint))];
+  return [...new Set([...s.tokens.recent, ...s.assessments.recentRejections, ...s.signals, ...s.positions, ...s.watchlist, ...s.events, ...s.review].map((x) => x.mint))];
 }
 
 export function dashboardState(d: DashboardDeps) {
@@ -118,14 +118,32 @@ export function dashboardState(d: DashboardDeps) {
 
   const events = q<{ at: number; mint: string; strategy: string; action: string; reasons: string }>("SELECT at, mint, strategy, action, reasons FROM decisions WHERE action != 'SNAPSHOT' ORDER BY at DESC LIMIT 20").map((e) => ({ ...e, reasons: JSON.parse(e.reasons) as string[] }));
 
-  // Last PASS per token in 24 h, plus what its newest check says (a token can pass, then fail a re-check minutes later).
-  const passed = q<{ mint: string; at: number; stage: string | null; total_cost_bps: number | null; liquidity_usd_reported: number | null }>("SELECT mint, MAX(at) at, stage, total_cost_bps, liquidity_usd_reported FROM assessments WHERE verdict='PASS' AND at >= ? GROUP BY mint ORDER BY at DESC LIMIT 12", now - 24 * 3_600_000).map((p) => {
-    const latest = one<{ verdict: string; at: number }>("SELECT verdict, at FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1", p.mint);
-    return { ...p, nowVerdict: latest?.verdict ?? "PASS", nowAt: latest?.at ?? p.at };
-  });
-
   const watchlist = d.watched?.() ?? [];
-  const shownMints = [...recentTokens, ...rejections, ...eligible, ...open, ...watchlist, ...events, ...passed].map((x) => x.mint);
+  const watchedSet = new Set(watchlist.map((w) => w.mint));
+  // One row per coin checked in the last 24 h: its NEWEST verdict, when, why, and how often it has passed.
+  // A coin that passed earlier and failed a re-check shows as rejected, with the time it last passed.
+  const review = q<{ mint: string; at: number; verdict: string; rejects: string; total_cost_bps: number | null; stage: string | null; checks: number; passes: number; last_pass: number | null }>(
+    `SELECT a.mint, a.at, a.verdict, a.rejects, a.total_cost_bps, a.stage,
+            s.checks, s.passes, s.last_pass
+       FROM assessments a
+       JOIN (SELECT mint, MAX(at) at, COUNT(*) checks, SUM(verdict='PASS') passes, MAX(CASE WHEN verdict='PASS' THEN at END) last_pass
+               FROM assessments WHERE at >= ? GROUP BY mint) s ON s.mint = a.mint AND s.at = a.at
+      ORDER BY (a.verdict='PASS') DESC, a.at DESC LIMIT 40`,
+    now - 24 * 3_600_000,
+  ).map((r) => ({
+    mint: r.mint,
+    at: r.at,
+    verdict: r.verdict,
+    watched: watchedSet.has(r.mint),
+    stage: r.stage,
+    costBps: r.total_cost_bps,
+    checks: r.checks,
+    passes: r.passes,
+    lastPass: r.last_pass,
+    rules: (JSON.parse(r.rejects) as { rule: string; observed: string; limit: string }[]).map((x) => `${x.rule} (${x.observed}; limit ${x.limit})`),
+  }));
+
+  const shownMints = [...recentTokens, ...rejections, ...eligible, ...open, ...watchlist, ...events, ...review].map((x) => x.mint);
   const meta: Record<string, { name: string | null; symbol: string | null; icon: string | null }> = {};
   const chunk = [...new Set(shownMints)];
   if (chunk.length) {
@@ -136,7 +154,7 @@ export function dashboardState(d: DashboardDeps) {
 
   return {
     meta,
-    passedRecently: passed,
+    review,
     now,
     mode: d.mode ?? "PAPER",
     liveTradingEnabled: LIVE_TRADING_ENABLED,

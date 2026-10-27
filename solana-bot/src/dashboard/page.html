@@ -112,8 +112,6 @@
   <div class="card c4">
     <h2>Watching <span class="count" id="watchCount">0</span></h2>
     <table id="watch"></table>
-    <h2 style="margin-top:16px">Passed the safety check (24 h)</h2>
-    <table id="passed"></table>
   </div>
 
   <div class="card c8">
@@ -132,8 +130,9 @@
   </div>
 
   <div class="card c8">
-    <h2>Recent rejections</h2>
-    <div class="scroll"><table id="rejections"></table></div>
+    <h2>Coins checked (24 h) <span class="count" id="reviewCount">0</span></h2>
+    <p class="note" style="margin:0 0 8px">One row per coin, newest check first. A coin is re-checked every few minutes while it is on the watchlist, so a pass can turn into a reject.</p>
+    <div class="scroll"><table id="review"></table></div>
   </div>
 
   <div class="card c4">
@@ -221,8 +220,8 @@ function render(s) {
 
   $("watchCount").textContent = s.watchlist.length;
   $("watch").innerHTML = s.watchlist.length ? `<tr><th>Token</th><th>Venue</th><th>Since</th></tr>` + s.watchlist.map((w) => `<tr><td>${tok(w.mint)}</td><td>${esc(venue(w.venue))}${w.researchOnly ? " " + pill(null, "research") : ""}</td><td>${ago(w.addedAt, now)}</td></tr>`).join("") : empty(3, "Nothing on the watchlist.");
-  $("passed").innerHTML = s.passedRecently.length ? `<tr><th>Token</th><th>Passed</th><th>Now</th><th class="num">Round trip</th></tr>` + s.passedRecently.slice(0, 8).map((x) => `<tr><td>${tok(x.mint)}</td><td>${ago(x.at, now)}</td><td>${x.nowVerdict === "PASS" ? pill(true, "still passing") : pill(false, "rejected " + ago(x.nowAt, now))}</td><td class="num">${x.total_cost_bps === null ? "–" : (x.total_cost_bps / 100).toFixed(2) + "%"}</td></tr>`).join("") : empty(4, "None in the last 24 h.");
-  $("rejections").innerHTML = a.recentRejections.length ? `<tr><th>Token</th><th>When</th><th>Why</th></tr>` + a.recentRejections.slice(0, 8).map((x) => `<tr><td>${tok(x.mint)}</td><td class="mono">${hhmm(x.at)}</td><td class="reasons">${esc(x.rules.join("; "))}</td></tr>`).join("") : empty(3, "No rejections yet.");
+  $("reviewCount").textContent = s.review.length;
+  $("review").innerHTML = s.review.length ? `<tr><th>Token</th><th>Now</th><th>Checked</th><th class="num">Passed</th><th class="num">Round trip</th><th>Why rejected</th></tr>` + s.review.map((x) => `<tr><td>${tok(x.mint)}${x.watched ? " " + pill(null, "watching") : ""}</td><td>${pill(x.verdict === "PASS", x.verdict === "PASS" ? "PASS" : "REJECT")}</td><td>${ago(x.at, now)}</td><td class="num" title="${x.lastPass ? "last passed " + esc(ago(x.lastPass, now)) : "never passed"}">${x.passes} / ${x.checks}</td><td class="num">${x.costBps === null ? "–" : (x.costBps / 100).toFixed(2) + "%"}</td><td class="reasons">${x.verdict === "PASS" ? "" : esc(x.rules.join("; "))}</td></tr>`).join("") : empty(6, "No coins checked in the last 24 h.");
 
   $("signals").innerHTML = s.signals.length ? `<tr><th>Time</th><th>Token</th><th>Strategy</th><th>Decision</th><th>Why</th></tr>` + s.signals.map((x) => `<tr><td class="mono">${hhmm(x.at)}</td><td>${tok(x.mint)}</td><td>${esc(x.strategy)}</td><td>${pill(x.action === "PAPER_ELIGIBLE", x.action === "PAPER_ELIGIBLE" ? `ENTER paper${x.sizeCad ? " CAD " + x.sizeCad : ""}` : "REJECT")}</td><td class="reasons">${esc(x.reasons.join("; "))}</td></tr>`).join("") : empty(5, "No strategy has fired yet.");
 
