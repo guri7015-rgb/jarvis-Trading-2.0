@@ -192,6 +192,7 @@ if (args.includes("--dashboard")) {
     limits: riskLimits.limits,
     limitsRefused: riskLimits.refused,
     ledger: paperLedger,
+    mode: drill ? "PAPER DRILL" : explore ? "PAPER EXPLORE" : "PAPER",
     marks: () => paperTrader?.marks() ?? new Map(),
     watched: () => engine?.watched() ?? [],
     rpcBudget: () => ({ usedToday: deps.budget.usedToday, remaining: deps.budget.remaining }),

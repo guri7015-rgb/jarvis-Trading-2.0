@@ -39,6 +39,9 @@ export const EXPLORE_PARAMS: StrategyParams = {
   D: { ...D_PARAMS },
 };
 
+/** Drill-mode data quality: the entry fills from a live quote, so the tape only needs a recent price. */
+export const DRILL_QUALITY = { minTrades180s: 1, maxSecondsSinceLastTrade: 900, maxMedianLagS: 30, blockingGapMs: 30_000 };
+
 /** Explore-mode data quality: half the trades, a minute of silence allowed. Lag and gap rules unchanged. */
 export const EXPLORE_QUALITY = { minTrades180s: 10, maxSecondsSinceLastTrade: 60, maxMedianLagS: 10, blockingGapMs: 2_000 };
 

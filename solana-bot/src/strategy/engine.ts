@@ -31,7 +31,7 @@ import { strategyC } from "./strategyC.ts";
 import { strategyD } from "./strategyD.ts";
 import type { Signal } from "./types.ts";
 import type { PaperTrader } from "../paper/trader.ts";
-import { DEFAULT_PARAMS, type StrategyParams } from "./params.ts";
+import { DEFAULT_PARAMS, DRILL_QUALITY, type StrategyParams } from "./params.ts";
 import type { Ledger } from "../paper/ledger.ts";
 import type { FxService, FxQuote } from "../market/fx.ts";
 
@@ -340,13 +340,14 @@ export class SignalEngine {
    * propose a fixed plan on the watched coin with the cheapest fresh PASS and
    * push it through the normal risk gates and the normal exits. Pure execution test.
    */
-  private drill(out: { mint: string; signal: Signal; decision: RiskDecision }[], features: Map<string, Features>): void {
+  private drill(out: { mint: string; signal: Signal; decision: RiskDecision }[], _features: Map<string, Features>): void {
     const now = this.d.clock.now();
     if (now - this.lastDrillAt < this.d.drillEveryMs!) return;
     if (this.ledgerOpen().length > 0 || (this.d.ledger?.pending().length ?? 0) > 0) return;
     if (out.some((r) => r.decision.approved)) return;
+    // Drill entries fill from a live quote, so the tape only needs a recent price: re-read features under the drill rules.
     const candidates = [...this.watch.keys()]
-      .map((mint) => ({ mint, a: this.assessment(mint), f: features.get(mint) }))
+      .map((mint) => ({ mint, a: this.assessment(mint), f: computeFeatures(mint, this.loadTrades(mint, now - 300_000), now, this.gaps(now - 300_000), DRILL_QUALITY) }))
       .filter((c) => c.a && c.a.verdict === "PASS" && now - c.a.at <= this.d.limits.maxAssessmentAgeMs && c.a.totalCostBps !== null && c.f?.last)
       .sort((x, y) => x.a!.totalCostBps! - y.a!.totalCostBps!);
     const c = candidates[0];
