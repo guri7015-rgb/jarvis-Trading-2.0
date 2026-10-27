@@ -335,6 +335,28 @@ const MIGRATIONS: string[] = [
   DROP TABLE risk_state;
   ALTER TABLE risk_state_v2 RENAME TO risk_state;
   `,
+  // 10: signal scorecard. Every valid setup (gates 1-7 passed) gets its USD price stamped when it
+  // fires and again at fixed horizons, so the desk can show a measured hit rate per signal type.
+  `
+  CREATE TABLE signal_outcomes (
+    decision_id INTEGER PRIMARY KEY,
+    mint TEXT NOT NULL,
+    strategy TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    verdict TEXT NOT NULL,
+    expected_move_pct REAL,
+    stop_pct REAL,
+    cost_pct REAL,
+    p0 REAL,
+    p0_at INTEGER,
+    p_1m REAL,
+    p_5m REAL,
+    p_30m REAL,
+    p_4h REAL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX signal_outcomes_at ON signal_outcomes (at);
+  `,
 ];
 
 export function openDb(path: string): DatabaseSync {

@@ -49,6 +49,15 @@ Mover rules (`DEFAULT_SCANNER_RULES`): at least 12 trades and 8 distinct buyers 
 
 Load measured on the free public RPC: about 700 transactions a second, two-thirds of them failed bot transactions, 157 MB of memory. Watch your Helius usage the first day; the scanner's WebSocket traffic is separate from the daily RPC call budget the bot counts.
 
+## The desk: http://127.0.0.1:4777/desk
+
+A dark screen meant to stay open. Runs whenever `--signals` and `--dashboard` are on.
+
+- **Entry now.** Setups that cleared every gate. The card flashes green for 12 seconds and beeps (turn sound on once with the button; the browser needs a click). Entry-up-to, stop, target, size, planned loss, reward-to-risk.
+- **Setups blocked by cost or limits.** Valid pattern, failed the cost gate or a daily limit. Amber. Shown so the pattern can be judged without being told to buy.
+- **Majors: long / short plans.** BTC, ETH, SOL, XRP, DOGE, ADA, AVAX, LINK on hourly Coinbase candles (public, no key). A close above the last 20 hours' high on 1.3x volume is a LONG plan, below the low a SHORT. Stop 2 x ATR(14), target 2 x the stop, size for CAD 2.50 of risk. Plans, not trades; a SHORT plan on a venue where you cannot short means "do not be long". `--no-majors` turns it off.
+- **Scorecard.** Every valid setup gets its USD price stamped when it appears and again at 1, 5, 30 minutes and 4 hours. "Beat cost" is the share whose move exceeded the signal's own round-trip estimate. Until that number is high over hundreds of signals, nothing here is an edge.
+
 ## Drill mode: a forced paper trade every 5 minutes
 
 For exercising fills and exits only. No strategy. Every 5 minutes, if nothing is open, the bot buys a paper position in the watched coin with the cheapest fresh PASS, with a fixed plan: stop 5% below, target 8% above, 10-minute time stop, the normal D veto and liquidity exits.

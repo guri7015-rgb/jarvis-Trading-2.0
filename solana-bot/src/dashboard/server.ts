@@ -2,6 +2,8 @@
  * Local dashboard. Binds to 127.0.0.1 only: never reachable from the network.
  *
  *   GET  /            the page
+ *   GET  /desk        the live signal desk
+ *   GET  /api/desk    entries, setups, movers, majors plans, scorecard
  *   GET  /api/state   everything the page shows
  *   POST /api/halt    emergency stop: flattens every open paper position (the
  *                     exit engine treats a KILL halt as "close everything") and
@@ -17,14 +19,16 @@ import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { resolve } from "node:path";
 import type { Logger } from "../core/log.ts";
+import { deskState, type DeskDeps } from "./desk.ts";
 import { dashboardState, type DashboardDeps } from "./state.ts";
 
 export const HALT_REASON = "KILL: manual stop from dashboard";
 
-export function startDashboard(deps: DashboardDeps, logger: Logger, port = 4777): Server {
+export function startDashboard(deps: DashboardDeps & { desk?: DeskDeps }, logger: Logger, port = 4777): Server {
   const token = randomBytes(16).toString("hex");
   const template = readFileSync(resolve(import.meta.dirname, "page.html"), "utf8");
   const html = template.replace('<html lang="en">', `<html lang="en" data-halt-token="${token}">`);
+  const deskHtml = readFileSync(resolve(import.meta.dirname, "desk.html"), "utf8");
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     try {
@@ -32,6 +36,17 @@ export function startDashboard(deps: DashboardDeps, logger: Logger, port = 4777)
         const body = JSON.stringify(dashboardState(deps), (_k, v) => (typeof v === "bigint" ? v.toString() : v));
         res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
         res.end(body);
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/api/desk") {
+        const body = JSON.stringify(deps.desk ? deskState(deps.desk) : { error: "desk not enabled: start with --signals" }, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
+        res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
+        res.end(body);
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/desk") {
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        res.end(deskHtml);
         return;
       }
       if (req.method === "POST" && url.pathname === "/api/halt") {

@@ -33,6 +33,9 @@ import { startDashboard } from "../dashboard/server.ts";
 import { dashboardState, shownMints } from "../dashboard/state.ts";
 import { TokenMetaService } from "../discovery/tokenMeta.ts";
 import { MoverScanner, type Mover } from "../market/firehose.ts";
+import { jupiterPriceFetcher } from "../market/prices.ts";
+import { MajorsDesk } from "../majors/majors.ts";
+import { OutcomeTracker } from "../signals/outcomes.ts";
 import { decodePumpSwapPool } from "../solana/pumpSwapPool.ts";
 import { PROGRAMS, MINTS } from "../solana/programs.ts";
 import type { Server } from "node:http";
@@ -261,6 +264,7 @@ function printStatus(): void {
   lines.push(`confirm: ${JSON.stringify(s.confirm)}  rpc budget used today=${s.rpcBudget.usedToday} left=${s.rpcBudget.remaining}  slot=${s.lastSlot ?? "?"}`);
   lines.push(`stream: ${JSON.stringify(s.stream)}`);
   if (s.assess) lines.push(`assess: ${JSON.stringify(s.assess)}`);
+  if (outcomes) lines.push(`scoring: ${JSON.stringify(outcomes.stats)}${majors ? `  majors: ${JSON.stringify(majors.stats)} plans=${majors.snapshot().plans.filter((p) => p.side !== "NONE").map((p) => `${p.product}:${p.side}`).join(",") || "none"}` : ""}`);
   if (scanner) {
     lines.push(`scan: ${JSON.stringify(scanner.stats)}`);
     for (const m of moversNow.slice(0, 5)) lines.push(`  mover ${(m.mint ?? m.key).slice(0, 8)} ${m.venue.padEnd(10)} trades60=${m.trades60} buyers=${m.buyers60} net=${(m.buySol60 - m.sellSol60).toFixed(2)} SOL ret60=${(m.ret60 * 100).toFixed(1)}% ${m.status}`);
@@ -279,6 +283,24 @@ function printStatus(): void {
   process.stdout.write(lines.join("\n") + "\n");
 }
 
+// Signal scorecard and the majors desk run whenever strategies run. Both are read-only.
+let outcomes: OutcomeTracker | undefined;
+let majors: MajorsDesk | undefined;
+const deskTimers: NodeJS.Timeout[] = [];
+if (args.includes("--signals")) {
+  outcomes = new OutcomeTracker(deps.db, jupiterPriceFetcher(deps.http, cfg.JUPITER_API_KEY), deps.clock, deps.logger);
+  deskTimers.push(setInterval(() => void outcomes!.tick().catch((e) => deps.logger.warn("scoring tick failed", { err: (e as Error).message })), 30_000));
+  if (!args.includes("--no-majors")) {
+    deps.health.register("coinbase", { kind: "poll", maxSilenceMs: 10 * 60_000, required: false });
+    let usdCad = 1.38;
+    const fxForMajors = new FxService(deps.http, () => deps.clock.now(), { maxUsdCadAgeDays: 5, solUsdCacheMs: 60_000, usdCadCacheMs: 6 * 3_600_000, apiKey: cfg.JUPITER_API_KEY });
+    void fxForMajors.usdCad().then((u) => (usdCad = u.rate)).catch(() => undefined);
+    majors = new MajorsDesk(deps.http, deps.clock, deps.logger, { usdCad: () => usdCad, riskCad: riskLimits.limits.maxLossPerTradeCad });
+    void majors.poll();
+    deskTimers.push(setInterval(() => void majors!.poll(), 60_000));
+  }
+}
+
 let metaTimer: NodeJS.Timeout | undefined;
 if (args.includes("--dashboard")) {
   const pIdx = args.indexOf("--port");
@@ -295,6 +317,9 @@ if (args.includes("--dashboard")) {
     rpcBudget: () => ({ usedToday: deps.budget.usedToday, remaining: deps.budget.remaining }),
     movers: scanner ? () => ({ list: moversNow, stats: scanner!.stats }) : undefined,
     now: () => deps.clock.now(),
+    desk: outcomes
+      ? { db: deps.db, outcomes, majors, movers: scanner ? () => ({ list: moversNow, stats: scanner!.stats }) : undefined, watched: () => engine?.watched() ?? [], mode: drill ? "PAPER DRILL" : explore ? "PAPER EXPLORE" : "PAPER", now: () => deps.clock.now() }
+      : undefined,
   };
   dashboard = startDashboard(dashDeps, deps.logger, pIdx >= 0 ? Number(args[pIdx + 1]) : 4777);
   // Names and logos for the tokens on screen: one Jupiter call a minute at most, display only.
@@ -317,6 +342,7 @@ function shutdown(signal: string): void {
   deps.logger.info("stopping", { signal });
   clearInterval(timer);
   if (metaTimer) clearInterval(metaTimer);
+  for (const t of deskTimers) clearInterval(t);
   engine?.stop();
   stream?.stop();
   scanner?.stop();

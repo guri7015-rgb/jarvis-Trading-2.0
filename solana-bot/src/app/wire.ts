@@ -55,6 +55,8 @@ export function buildDeps(cfg: AppConfig): ServiceDeps {
     jupiter_quote: jupiter,
     jupiter_price: jupiter,
     bankofcanada: new RateLimiter(1, 0.5, clock),
+    // Coinbase Exchange public market data: documented 10 req/s; we poll 8 products a minute.
+    coinbase: new RateLimiter(4, 2, clock),
     // 300/min documented.
     dexscreener: new RateLimiter(5, 2, clock),
     // Public RPC: 40 req/10s per method. Helius free: 10 req/s.

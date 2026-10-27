@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal Desk</title>
+<style>
+  /* A single dark screen meant to be left open: entries flash and beep when they arrive. */
+  :root { --bg: #0b0e14; --panel: #131824; --panel2: #1a2130; --line: #26304a; --fg: #eef2f8; --muted: #8a94ab;
+    --go: #22d47a; --gobg: #0f3a25; --amber: #f4b942; --amberbg: #3b2d0c; --red: #ff5f57; --redbg: #3a1a18; --blue: #6c9cff; --bluebg: #1b2a52;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; --sans: Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 var(--sans); }
+  .wrap { padding-block: 14px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1800px; margin: 0 auto; }
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; padding: 10px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .brand { font-weight: 800; font-size: 18px; letter-spacing: .02em; display: flex; align-items: center; gap: 10px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--go); box-shadow: 0 0 10px var(--go); }
+  .dot.off { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .kv { color: var(--muted); font-size: 12px; } .kv b { color: var(--fg); font-family: var(--mono); }
+  .spacer { flex: 1; }
+  button { font: inherit; font-weight: 600; background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button.on { background: var(--gobg); border-color: var(--go); color: var(--go); }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 22px 0 10px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  h2 .count { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; font-size: 11px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; min-width: 0; position: relative; }
+  .card.enter { border-color: var(--go); }
+  .card.setup { border-color: var(--amber); }
+  .card.drill { border-color: var(--blue); }
+  .card.fresh.enter { animation: flashgo 1s ease-in-out 12; }
+  .card.fresh.setup { animation: flashamber 1s ease-in-out 6; }
+  @keyframes flashgo { 50% { box-shadow: 0 0 0 4px var(--go), 0 0 30px var(--go); background: var(--gobg); } }
+  @keyframes flashamber { 50% { box-shadow: 0 0 0 3px var(--amber); background: var(--amberbg); } }
+  @media (prefers-reduced-motion: reduce) { .card.fresh { animation: none !important; } }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .05em; }
+  .tag.go { background: var(--gobg); color: var(--go); } .tag.amber { background: var(--amberbg); color: var(--amber); } .tag.red { background: var(--redbg); color: var(--red); } .tag.blue { background: var(--bluebg); color: var(--blue); } .tag.grey { background: var(--panel2); color: var(--muted); }
+  .tok { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; flex: none; background: var(--panel2); border: 1px solid var(--line); display: grid; place-items: center; font-weight: 700; font-size: 12px; color: var(--muted); overflow: hidden; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .t1 { font-weight: 800; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .t1 .nm { font-weight: 400; color: var(--muted); margin-left: 6px; font-size: 13px; }
+  .t2 { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .age { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .plan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+  .plan div { background: var(--panel2); border-radius: 8px; padding: 6px 8px; }
+  .plan .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; } .plan .v { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+  .up { color: var(--go); } .down { color: var(--red); }
+  .why { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .out { display: flex; gap: 10px; font-family: var(--mono); font-size: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .out span { background: var(--panel2); border-radius: 6px; padding: 2px 7px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 11px; padding: 4px 8px 6px 0; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; font-family: var(--mono); }
+  .mono { font-family: var(--mono); }
+  .empty { color: var(--muted); font-style: italic; padding: 10px 0; }
+  .note { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top">
+  <div class="brand"><span class="dot" id="dot"></span>Signal Desk</div>
+  <span class="tag blue" id="mode">PAPER</span>
+  <span class="kv">updated <b id="upd">–</b></span>
+  <span class="kv">scoring <b id="scoring">–</b></span>
+  <span class="spacer"></span>
+  <button id="sound" type="button">Sound off</button>
+  <a href="/" style="color:var(--muted);font-size:12px">full dashboard</a>
+</div>
+
+<h2>Entry now <span class="count" id="nEnter">0</span> <span class="note" style="margin:0">cleared every gate: safety, liquidity, cost, risk</span></h2>
+<div class="cards" id="enter"></div>
+
+<h2>Setups blocked by cost or limits <span class="count" id="nSetup">0</span> <span class="note" style="margin:0">valid pattern, but the trip costs more than the expected move, or a daily limit is used up</span></h2>
+<div class="cards" id="setup"></div>
+
+<h2>Majors: long / short plans <span class="count" id="nMajors">0</span> <span class="note" style="margin:0">hourly Donchian breakout on Coinbase candles; plans for a person with an exchange account</span></h2>
+<div class="cards" id="majors"></div>
+
+<h2>Movers right now <span class="count" id="nMovers">0</span></h2>
+<div class="panel scroll"><table id="movers"></table></div>
+
+<h2>Scorecard, last 7 days <span class="note" style="margin:0">measured from the price when the signal appeared on this screen</span></h2>
+<div class="panel scroll"><table id="score"></table><p class="note">"Beat cost" = the move at that horizon exceeded the signal's own round-trip cost estimate. That is the number that has to be high before any of this is worth real money.</p></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const short = (m) => m.slice(0, 4) + "…" + m.slice(-4);
+const ago = (s) => s < 60 ? s + "s ago" : s < 3600 ? Math.round(s / 60) + "m ago" : (s / 3600).toFixed(1) + "h ago";
+const px = (x) => x === null || x === undefined ? "–" : x < 0.001 ? Number(x).toExponential(3) : Number(x).toLocaleString(undefined, { maximumFractionDigits: 2 });
+const pct = (x, d = 1) => x === null || x === undefined ? "–" : (x > 0 ? "+" : "") + Number(x).toFixed(d) + "%";
+const cls = (x) => x > 0 ? "up" : x < 0 ? "down" : "";
+let META = {}, seen = new Set(), first = true, soundOn = false, audio;
+try { soundOn = localStorage.getItem("deskSound") === "1"; } catch {}
+function beep(kind) {
+  if (!soundOn) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.type = "sine"; o.frequency.value = kind === "enter" ? 880 : 520;
+    g.gain.value = 0.0001; o.connect(g); g.connect(audio.destination); o.start();
+    g.gain.exponentialRampToValueAtTime(0.3, audio.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + (kind === "enter" ? 0.6 : 0.25));
+    o.stop(audio.currentTime + 0.7);
+  } catch {}
+}
+function tok(mint) {
+  const m = META[mint] || {};
+  const label = m.symbol || (m.name ? m.name.slice(0, 12) : short(mint));
+  const initials = (m.symbol || m.name || mint).replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
+  const img = m.icon ? `<img src="${esc(m.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='${esc(initials)}'">` : esc(initials);
+  return `<div class="tok" title="${esc(mint)}"><span class="avatar">${img}</span><div><div class="t1">${esc(label)}${m.name && m.symbol ? `<span class="nm">${esc(m.name)}</span>` : ""}</div><div class="t2">${esc(short(mint))}</div></div></div>`;
+}
+const strat = (s) => ({ A_continuation: "A · continuation", B_breakout_retest: "B · breakout + retest", B_breakout_no_retest: "B · breakout", C_early_acceleration: "C · early acceleration", DRILL: "drill" }[s] || s);
+function sigCard(s, fresh) {
+  const kind = s.strategy === "DRILL" ? "drill" : s.kind === "ENTER" ? "enter" : "setup";
+  const tag = kind === "enter" ? `<span class="tag go">ENTER</span>` : kind === "drill" ? `<span class="tag blue">DRILL</span>` : `<span class="tag amber">${esc(s.blockedBy || "BLOCKED")}</span>`;
+  const o = s.outcome;
+  return `<div class="card ${kind} ${fresh ? "fresh" : ""}" data-id="${s.id}">
+    <div class="head">${tok(s.mint)}<div style="text-align:right">${tag}<div class="age">${ago(s.ageS)}</div></div></div>
+    <div class="note" style="margin:0 0 6px">${esc(strat(s.strategy))}</div>
+    <div class="plan">
+      <div><div class="k">Entry up to</div><div class="v">${px(s.maxEntryPrice)}</div></div>
+      <div><div class="k">Stop</div><div class="v down">${px(s.stop)} <small>${pct(s.stopPct === null ? null : -s.stopPct)}</small></div></div>
+      <div><div class="k">Target</div><div class="v up">${px(s.target)} <small>${pct(s.targetPct)}</small></div></div>
+      <div><div class="k">Size</div><div class="v">${s.sizeCad ? "CAD " + s.sizeCad.toFixed(0) : "–"}</div></div>
+      <div><div class="k">Planned loss</div><div class="v">${s.plannedLossCad ? "CAD " + s.plannedLossCad.toFixed(2) : "–"}</div></div>
+      <div><div class="k">Reward : risk</div><div class="v ${s.rewardToRisk >= 1 ? "up" : "down"}">${s.rewardToRisk === null ? "–" : s.rewardToRisk.toFixed(2)}</div></div>
+    </div>
+    <div class="why">${esc((s.why || []).join("; "))}${s.blockedDetail ? `<br><b>Blocked:</b> ${esc(s.blockedDetail)}` : ""}${s.timeStopS ? `<br>Time stop ${Math.round(s.timeStopS / 60)} min` : ""}</div>
+    ${o && o.stamped ? `<div class="out"><span>since signal:</span><span class="${cls(o.r1m)}">1m ${pct(o.r1m)}</span><span class="${cls(o.r5m)}">5m ${pct(o.r5m)}</span><span class="${cls(o.r30m)}">30m ${pct(o.r30m)}</span><span class="${cls(o.r4h)}">4h ${pct(o.r4h)}</span></div>` : ""}
+  </div>`;
+}
+function majorCard(p) {
+  const side = p.side;
+  const tag = side === "LONG" ? `<span class="tag go">LONG</span>` : side === "SHORT" ? `<span class="tag red">SHORT</span>` : `<span class="tag grey">no plan</span>`;
+  return `<div class="card ${side === "NONE" ? "" : side === "LONG" ? "enter" : "setup"}">
+    <div class="head"><div class="t1">${esc(p.product.replace("-USD", ""))} <span class="nm">USD ${px(p.price)}</span></div><div style="text-align:right">${tag}<div class="age">${p.ageH < 1 ? "this hour" : p.ageH.toFixed(0) + "h ago"}</div></div></div>
+    ${side === "NONE" ? `<div class="why">${esc(p.reasons.join("; "))}</div>` : `
+    <div class="plan">
+      <div><div class="k">Entry zone</div><div class="v">${px(p.entryZoneLow)}–${px(p.entryZoneHigh)}</div></div>
+      <div><div class="k">Stop</div><div class="v down">${px(p.stop)} <small>${pct(-p.stopPct)}</small></div></div>
+      <div><div class="k">Target</div><div class="v up">${px(p.target)} <small>${pct(p.targetPct)}</small></div></div>
+      <div><div class="k">Size for CAD ${p.sizeForRiskCad.riskCad} risk</div><div class="v">${p.sizeForRiskCad.units.toPrecision(3)} ${esc(p.product.replace("-USD", ""))}</div></div>
+      <div><div class="k">Notional</div><div class="v">USD ${px(p.sizeForRiskCad.notionalUsd)}</div></div>
+      <div><div class="k">Invalid if</div><div class="v">${side === "LONG" ? "close < " : "close > "}${px(p.level)}</div></div>
+    </div>
+    <div class="why">${esc(p.reasons.join("; "))}. Stop is 2 × ATR(14); target is 2 × the stop distance.</div>`}
+  </div>`;
+}
+function render(s) {
+  META = s.meta || {};
+  $("mode").textContent = s.mode;
+  $("upd").textContent = new Date(s.now).toISOString().slice(11, 19) + "Z";
+  $("scoring").textContent = s.scoringStats ? `${s.scoringStats.registered} signals, ${s.scoringStats.stamped} stamped` : "off";
+  $("dot").className = "dot";
+  const enter = s.signals.filter((x) => x.kind === "ENTER" && x.strategy !== "DRILL");
+  const setup = s.signals.filter((x) => x.kind !== "ENTER" || x.strategy === "DRILL");
+  let newEnter = 0, newSetup = 0;
+  for (const x of s.signals) if (!seen.has(x.id)) { seen.add(x.id); if (!first) { if (x.kind === "ENTER" && x.strategy !== "DRILL") newEnter++; else newSetup++; } }
+  if (newEnter) beep("enter"); else if (newSetup) beep("setup");
+  const isFresh = (x) => !first && x.ageS < 90;
+  $("nEnter").textContent = enter.length;
+  $("enter").innerHTML = enter.length ? enter.map((x) => sigCard(x, isFresh(x))).join("") : `<div class="empty">Nothing has cleared every gate in the last 3 hours. The cost gate is usually what stops it.</div>`;
+  $("nSetup").textContent = setup.length;
+  $("setup").innerHTML = setup.length ? setup.slice(0, 12).map((x) => sigCard(x, isFresh(x))).join("") : `<div class="empty">No valid setups in the last 3 hours.</div>`;
+  const plans = s.majors ? s.majors.plans : [];
+  $("nMajors").textContent = plans.filter((p) => p.side !== "NONE").length;
+  $("majors").innerHTML = plans.length ? plans.map(majorCard).join("") : `<div class="empty">Majors desk is off or still loading candles.</div>`;
+  const L = s.movers ? s.movers.list : [];
+  $("nMovers").textContent = L.length;
+  $("movers").innerHTML = L.length ? `<tr><th>Coin</th><th>Venue</th><th class="num">Trades 60s</th><th class="num">Buyers</th><th class="num">Net SOL</th><th class="num">Move 60s</th><th>Status</th></tr>` + L.map((m) => `<tr><td>${m.mint ? tok(m.mint) : `<span class="mono">${esc(short(m.key))}</span>`}</td><td>${esc(m.venue)}</td><td class="num">${m.trades60}</td><td class="num">${m.buyers60}</td><td class="num ${cls(m.buySol60 - m.sellSol60)}">${(m.buySol60 - m.sellSol60).toFixed(2)}</td><td class="num ${cls(m.ret60)}">${pct(m.ret60 * 100)}</td><td>${esc(m.status)}</td></tr>`).join("") : `<tr><td class="empty">Scanner off, or nothing moving by its rules.</td></tr>`;
+  const sc = s.scorecard || [];
+  $("score").innerHTML = sc.length ? `<tr><th>Signal</th><th>Kind</th><th class="num">Signals</th><th class="num">Stamped</th>${["1m", "5m", "30m", "4h"].map((h) => `<th class="num">${h} avg</th><th class="num">${h} beat cost</th>`).join("")}</tr>` + sc.map((r) => `<tr><td>${esc(strat(r.strategy))}</td><td>${r.verdict === "ENTER" ? `<span class="tag go">ENTER</span>` : `<span class="tag amber">SETUP</span>`}</td><td class="num">${r.n}</td><td class="num">${r.stamped}</td>${r.horizons.map((h) => `<td class="num ${cls(h.avgRetPct)}">${h.n ? pct(h.avgRetPct, 2) : "–"}</td><td class="num">${h.n ? h.beatCostPct.toFixed(0) + "% of " + h.n : "–"}</td>`).join("")}</tr>`).join("") : `<tr><td class="empty">No scored signals yet.</td></tr>`;
+  first = false;
+}
+async function refresh() {
+  try {
+    const r = await fetch("/api/desk", { cache: "no-store" });
+    const s = await r.json();
+    if (s.error) { $("dot").className = "dot off"; $("upd").textContent = s.error; return; }
+    render(s);
+  } catch { $("dot").className = "dot off"; $("upd").textContent = "bot not responding"; }
+}
+function setSound(on) { soundOn = on; $("sound").textContent = on ? "Sound on" : "Sound off"; $("sound").className = on ? "on" : ""; try { localStorage.setItem("deskSound", on ? "1" : "0"); } catch {} if (on) beep("setup"); }
+$("sound").addEventListener("click", () => setSound(!soundOn));
+setSound(soundOn);
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

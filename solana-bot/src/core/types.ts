@@ -24,6 +24,7 @@ export type ProviderId =
   | "solana_rpc"
   | "solana_ws"
   | "solana_firehose"
+  | "coinbase"
   | "bankofcanada";
 
 /**
