@@ -53,6 +53,26 @@ for (const [s, m] of tally) {
   const total = [...m.values()].reduce((a, b) => a + b, 0);
   for (const [k, n] of [...m].sort((a, b) => b[1] - a[1]).slice(0, 8)) out.push(`  ${String(Math.round((100 * n) / total)).padStart(3)}%  ${k}`);
 }
+// Young coins: how many did we see, how many got checked, and what stopped them.
+const youngMs = P.C.maxTokenAgeMs;
+const youngSeen = db.prepare("SELECT COUNT(*) n FROM tokens WHERE first_observed_at >= ? AND created_at IS NOT NULL").get(since) as { n: number };
+const youngAssessed = db.prepare(
+  `SELECT a.verdict, a.rejects, a.candidate_source FROM assessments a JOIN tokens t ON t.mint = a.mint
+    WHERE a.at >= ? AND t.created_at IS NOT NULL AND a.at - t.created_at <= ?`,
+).all(since, youngMs) as { verdict: string; rejects: string; candidate_source: string | null }[];
+const rules = new Map<string, number>();
+let youngPass = 0, youngResearch = 0;
+for (const a of youngAssessed) {
+  const rj = JSON.parse(a.rejects) as { rule: string; kind: string }[];
+  if (a.verdict === "PASS") youngPass++;
+  else if (rj.length && rj.every((x) => x.kind === "data")) youngResearch++;
+  for (const x of rj) rules.set(`${x.rule} (${x.kind})`, (rules.get(`${x.rule} (${x.kind})`) ?? 0) + 1);
+}
+const youngWatched = new Set(rows.filter((r) => r.created_at && r.at - r.created_at <= youngMs).map((r) => r.mint)).size;
+out.push(`\n## Young coins (under ${youngMs / 60_000} min when checked), last ${hours} h`);
+out.push(`  seen ${youngSeen.n}, checked ${youngAssessed.length} times (${youngAssessed.filter((a) => a.candidate_source?.endsWith(":quick")).length} quick), passed ${youngPass}, passed all but holders ${youngResearch}, watched ${youngWatched}`);
+for (const [k, n] of [...rules].sort((a, b) => b[1] - a[1]).slice(0, 8)) out.push(`  ${String(n).padStart(4)}  ${k}`);
+if (!youngAssessed.length) out.push("  none checked: young coins are not reaching the assessor (scanner off, or nothing young passed the mover rules)");
 out.push("\nThe first reason only. Fix the top one and the next appears. 'N' stands in for the numbers.");
 process.stdout.write(out.join("\n") + "\n");
 db.close();
