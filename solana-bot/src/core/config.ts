@@ -14,6 +14,12 @@ export const LIVE_TRADING_ENABLED = false as const;
 const EnvSchema = z.object({
   SOLANA_RPC_URL: z.url().default("https://api.mainnet.solana.com"),
   SOLANA_WS_URL: z.url().default("wss://api.mainnet.solana.com"),
+  /**
+   * The scanner's firehose (every pump.fun and PumpSwap transaction, ~700 a second).
+   * Kept on the free public WebSocket on purpose: on a keyed provider those messages
+   * count against the plan's credits and exhaust a free plan in under an hour.
+   */
+  SOLANA_FIREHOSE_WS_URL: z.url().default("wss://api.mainnet.solana.com"),
   JUPITER_API_KEY: z.string().trim().optional().transform((v) => (v ? v : undefined)),
   RPC_DAILY_CALL_BUDGET: z.coerce.number().int().min(0).max(1_000_000).default(25_000),
   DATA_DIR: z.string().default("./data"),
@@ -65,6 +71,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, dotEnvPath = re
   // RPC URLs from paid/free providers embed the key in the URL.
   if (!isPublicRpc(cfg.SOLANA_RPC_URL)) registerSecret(cfg.SOLANA_RPC_URL);
   if (!isPublicRpc(cfg.SOLANA_WS_URL)) registerSecret(cfg.SOLANA_WS_URL);
+  if (!isPublicRpc(cfg.SOLANA_FIREHOSE_WS_URL)) registerSecret(cfg.SOLANA_FIREHOSE_WS_URL);
   return {
     ...cfg,
     discovery: {

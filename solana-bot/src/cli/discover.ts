@@ -60,7 +60,8 @@ const poolMint = new Map<string, string | null>();
 let scanTimer: NodeJS.Timeout | undefined;
 if (scan) {
   deps.health.register("solana_firehose", { kind: "stream", maxSilenceMs: 60_000, required: false });
-  scanner = new MoverScanner({ url: cfg.SOLANA_WS_URL, factory: deps.wsFactory, clock: deps.clock, health: deps.health, logger: deps.logger });
+  if (!/api\.mainnet(-beta)?\.solana\.com/.test(cfg.SOLANA_FIREHOSE_WS_URL)) deps.logger.warn("firehose is on a keyed WebSocket; its ~700 messages a second will be billed against that plan", { host: new URL(cfg.SOLANA_FIREHOSE_WS_URL).host });
+  scanner = new MoverScanner({ url: cfg.SOLANA_FIREHOSE_WS_URL, factory: deps.wsFactory, clock: deps.clock, health: deps.health, logger: deps.logger });
   const registry = new TokenRegistry(deps.db);
   const resolveMint = async (m: Mover): Promise<string | undefined> => {
     if (m.venue === "pump_curve") return m.key;

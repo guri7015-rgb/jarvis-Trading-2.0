@@ -47,7 +47,7 @@ caffeinate -i npm run discover -- --assess --signals --paper --explore --scan --
 
 Mover rules (`DEFAULT_SCANNER_RULES`): at least 12 trades and 8 distinct buyers in 60 s, net buying of 0.3 SOL or more, price up 3% to 80% over 60 s, at least 3 trades in the last 15 s. The dashboard shows the top 10 with their status in the pipeline.
 
-Load measured on the free public RPC: about 700 transactions a second, two-thirds of them failed bot transactions, 157 MB of memory. Watch your Helius usage the first day; the scanner's WebSocket traffic is separate from the daily RPC call budget the bot counts.
+Load measured on the free public RPC: about 700 transactions a second, two-thirds of them failed bot transactions, 157 MB of memory. The firehose runs on `SOLANA_FIREHOSE_WS_URL`, the free public WebSocket by default, never on Helius: on 2026-10-27 it exhausted a free Helius plan in under an hour and every call returned 429 afterwards.
 
 ## The desk: http://127.0.0.1:4777/desk
 
