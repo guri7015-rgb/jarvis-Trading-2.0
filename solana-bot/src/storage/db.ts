@@ -348,14 +348,22 @@ function migrate(db: DatabaseSync): void {
 }
 
 /** Run `fn` in a transaction. */
+const txDepth = new WeakMap<DatabaseSync, number>();
+
+/** Run `fn` in a transaction. Nested calls become savepoints, so a caller can make several ledger writes atomic. */
 export function tx<T>(db: DatabaseSync, fn: () => T): T {
-  db.exec("BEGIN");
+  const depth = txDepth.get(db) ?? 0;
+  const sp = `sp${depth}`;
+  db.exec(depth === 0 ? "BEGIN" : `SAVEPOINT ${sp}`);
+  txDepth.set(db, depth + 1);
   try {
     const r = fn();
-    db.exec("COMMIT");
+    db.exec(depth === 0 ? "COMMIT" : `RELEASE ${sp}`);
     return r;
   } catch (e) {
-    db.exec("ROLLBACK");
+    db.exec(depth === 0 ? "ROLLBACK" : `ROLLBACK TO ${sp}; RELEASE ${sp}`);
     throw e;
+  } finally {
+    txDepth.set(db, depth);
   }
 }

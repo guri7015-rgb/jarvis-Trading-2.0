@@ -107,10 +107,12 @@ export class PaperTrader {
       this.stats.entries++;
       this.d.logger.info("paper entry", { id, mint: req.mint, strategy: s.strategy, sizeCad: d.sizeCad, entryPrice: r.entryPrice, slippageBps: r.fill.slippageBps, latencyMs: r.fill.simLatencyMs });
     } else {
-      this.d.ledger.recordEntryFailure(id, r.fill);
       this.stats.entryFailures++;
       const feesCad = (Number(r.fill.baseFee + r.fill.priorityFee) / 1e9) * req.fx.solCad;
-      this.d.riskState.recordClose(-feesCad);
+      // Ledger and daily risk state move together or not at all.
+      this.d.ledger.atomic(() => {
+        if (this.d.ledger.recordEntryFailure(id, r.fill)) this.d.riskState.recordClose(-feesCad);
+      });
       this.d.logger.warn("paper entry failed", { id, mint: req.mint, failure: r.fill.failure, feesCad });
     }
     return this.d.ledger.get(id);
@@ -179,17 +181,22 @@ export class PaperTrader {
         return decision;
       }
       const tokens = decision.action === "EXIT_PARTIAL" ? held / 2n : held;
+      const orderKey = String(now);
       const r = await this.d.executor.sell(p.mint, tokens, this.d.slippageBps);
       const detail = decision.matched.map((m) => `${m.reason}: ${m.detail}`).join("; ");
       if (r.ok) {
-        this.d.ledger.recordExitFill(p.id, r.fill, tokens, decision.reason ?? "EXIT", detail, solCad);
+        // Fill and daily risk state in one transaction, keyed so a repeat cannot credit cash twice.
+        const after = this.d.ledger.atomic(() => {
+          if (!this.d.ledger.recordExitFill(p.id, r.fill, tokens, decision.reason ?? "EXIT", detail, solCad, orderKey)) return undefined;
+          const a = this.d.ledger.get(p.id);
+          if (a?.state === "CLOSED" && a.realized_pnl_cad !== null) this.d.riskState.recordClose(a.realized_pnl_cad);
+          return a;
+        });
         this.lastMark.delete(p.id);
-        const after = this.d.ledger.get(p.id);
-        if (after?.state === "CLOSED" && after.realized_pnl_cad !== null) this.d.riskState.recordClose(after.realized_pnl_cad);
         this.stats.exits++;
         this.d.logger.info("paper exit", { id: p.id, reason: decision.reason, tokens: tokens.toString(), pnlCad: after?.realized_pnl_cad, slippageBps: r.fill.slippageBps });
       } else {
-        this.d.ledger.recordExitFailure(p.id, r.fill, decision.reason ?? "EXIT", r.noRoute);
+        this.d.ledger.recordExitFailure(p.id, r.fill, decision.reason ?? "EXIT", r.noRoute, orderKey);
         this.stats.exitFailures++;
         if (r.noRoute) {
           this.stats.stuck++;

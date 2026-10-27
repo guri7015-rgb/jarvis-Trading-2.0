@@ -81,6 +81,31 @@ export class Ledger {
     private readonly mode: Mode = "paper",
   ) {}
 
+  /** Several ledger writes as one unit (uses savepoints when already inside a transaction). */
+  atomic<T>(fn: () => T): T {
+    return tx(this.db, fn);
+  }
+
+  /**
+   * Start-up recovery. A crash can leave a position PROPOSED or ENTRY_PENDING
+   * (no fill was ever recorded, no cash moved) or EXIT_PENDING (still held).
+   * The first two become FAILED with no P&L so they stop blocking entries; the
+   * last goes back to OPEN so the exit engine manages it again.
+   */
+  recover(): { failedUnresolved: string[]; reopened: string[] } {
+    return tx(this.db, () => {
+      const unresolved = this.db.prepare("SELECT id FROM positions WHERE mode = ? AND state IN ('PROPOSED','ENTRY_PENDING')").all(this.mode) as { id: string }[];
+      for (const { id } of unresolved) {
+        this.db
+          .prepare("UPDATE positions SET state = 'FAILED', closed_at = ?, updated_at = ?, close_reason = 'RECOVERED_UNRESOLVED', close_detail = 'process stopped before the entry resolved; no fill recorded, no cash moved', realized_pnl_lamports = '0', realized_pnl_cad = 0 WHERE id = ?")
+          .run(this.now(), this.now(), id);
+      }
+      const pendingExits = this.db.prepare("SELECT id FROM positions WHERE mode = ? AND state = 'EXIT_PENDING'").all(this.mode) as { id: string }[];
+      for (const { id } of pendingExits) this.db.prepare("UPDATE positions SET state = 'OPEN', updated_at = ? WHERE id = ?").run(this.now(), id);
+      return { failedUnresolved: unresolved.map((u) => u.id), reopened: pendingExits.map((u) => u.id) };
+    });
+  }
+
   /** Create the paper account once. Later calls keep the existing balance. */
   initAccount(startingCad: number, solCad: number): void {
     const lamports = BigInt(Math.floor((startingCad / solCad) * 1e9));
@@ -202,14 +227,24 @@ export class Ledger {
     if (netLamports > BigInt(p.peak_net_lamports)) this.db.prepare("UPDATE positions SET peak_net_lamports = ?, updated_at = ? WHERE id = ?").run(netLamports.toString(), this.now(), positionId);
   }
 
-  /** Exit fill for `tokensSold` (all, or part). Rent comes back only when the account is emptied. */
-  recordExitFill(positionId: string, f: OrderFill, tokensSold: bigint, reason: string, detail: string, solCadNow: number | null): boolean {
+  private sellOrderId(positionId: string, orderKey?: string): string | undefined {
+    const id = orderKey ? `${positionId}:sell:${orderKey}` : `${positionId}:sell:${(this.db.prepare("SELECT COUNT(*) n FROM orders WHERE position_id = ? AND side = 'sell'").get(positionId) as { n: number }).n + 1}`;
+    // Idempotent: the same order key applied twice does nothing the second time.
+    return this.db.prepare("SELECT 1 FROM orders WHERE id = ?").get(id) ? undefined : id;
+  }
+
+  /**
+   * Exit fill for `tokensSold` (all, or part). Rent comes back only when the account is emptied.
+   * `orderKey` makes the call idempotent: a repeat with the same key is ignored.
+   */
+  recordExitFill(positionId: string, f: OrderFill, tokensSold: bigint, reason: string, detail: string, solCadNow: number | null, orderKey?: string): boolean {
     return tx(this.db, () => {
       const p = this.get(positionId);
       if (!p || (p.state !== "OPEN" && p.state !== "STUCK" && p.state !== "EXIT_PENDING")) return false;
       const held = BigInt(p.tokens_held);
       if (tokensSold > held || tokensSold <= 0n) throw new Error("exit size exceeds holding");
-      const orderId = `${positionId}:sell:${(this.db.prepare("SELECT COUNT(*) n FROM orders WHERE position_id = ? AND side = 'sell'").get(positionId) as { n: number }).n + 1}`;
+      const orderId = this.sellOrderId(positionId, orderKey);
+      if (!orderId) return false;
       this.insertOrder(orderId, positionId, "sell", "FILLED", f, reason);
       const fees = f.baseFee + f.priorityFee;
       const remaining = held - tokensSold;
@@ -231,11 +266,12 @@ export class Ledger {
   }
 
   /** Exit attempt failed (no route, failed tx): fees paid, still held. */
-  recordExitFailure(positionId: string, f: OrderFill, reason: string, stuck: boolean): boolean {
+  recordExitFailure(positionId: string, f: OrderFill, reason: string, stuck: boolean, orderKey?: string): boolean {
     return tx(this.db, () => {
       const p = this.get(positionId);
       if (!p || (p.state !== "OPEN" && p.state !== "STUCK" && p.state !== "EXIT_PENDING")) return false;
-      const orderId = `${positionId}:sell:${(this.db.prepare("SELECT COUNT(*) n FROM orders WHERE position_id = ? AND side = 'sell'").get(positionId) as { n: number }).n + 1}`;
+      const orderId = this.sellOrderId(positionId, orderKey);
+      if (!orderId) return false;
       this.insertOrder(orderId, positionId, "sell", "FAILED", f, reason);
       const fees = f.baseFee + f.priorityFee;
       if (fees > 0n) this.adjustCash(-fees);

@@ -83,6 +83,54 @@ describe("Ledger", () => {
     expect(ledger.account()!.cash).toBe(3_571_428_571n - 200_000_000n - 7000n - 2_074_080n);
     expect(() => ledger.recordExitFill("p1", { ...fill, fillIn: 2000n, fillOut: 1n }, 2000n, "X", "", 140)).toThrow(/exceeds/);
   });
+
+  it("a keyed exit applied twice credits cash once", () => {
+    const { ledger } = setup();
+    ledger.propose({ id: "p1", mint: PUMP_MINT, venue: "pumpswap", strategy: "A_continuation", decimals: 6, plannedSizeLamports: 200_000_000n, plannedLossCad: 2.5, invalidationPrice: 1, targetPrice: 2, timeStopMs: 1000, solCad: 140, fxJson: "{}" });
+    const fill = { quoteIn: 200_000_000n, quoteOut: 1000n, quoteImpactPct: 1, quoteRoute: "x", quoteAt: T0, simLatencyMs: 1, baseFee: 5000n, priorityFee: 2000n, rent: 2_074_080n, fillIn: 200_000_000n, fillOut: 1000n };
+    ledger.recordEntryFill("p1", fill, 1);
+    const sell = { ...fill, fillIn: 500n, fillOut: 110_000_000n };
+    expect(ledger.recordExitFill("p1", sell, 500n, "TARGET", "", 140, "k1")).toBe(true);
+    const cash = ledger.account()!.cash;
+    expect(ledger.recordExitFill("p1", sell, 500n, "TARGET", "", 140, "k1")).toBe(false); // replay
+    expect(ledger.account()!.cash).toBe(cash);
+    expect(ledger.recordExitFill("p1", sell, 500n, "TARGET", "", 140, "k2")).toBe(true); // a genuinely new sell
+    expect(ledger.get("p1")!.state).toBe("CLOSED");
+  });
+
+  it("recovers after an unclean stop: unresolved entries fail with no P&L, pending exits reopen", () => {
+    const { ledger, db } = setup();
+    const propose = (id: string) => ledger.propose({ id, mint: PUMP_MINT, venue: "pumpswap", strategy: "A_continuation", decimals: 6, plannedSizeLamports: 200_000_000n, plannedLossCad: 2.5, invalidationPrice: 1, targetPrice: 2, timeStopMs: 1000, solCad: 140, fxJson: "{}" });
+    propose("stuckProposed");
+    propose("wasExiting");
+    const fill = { quoteIn: 200_000_000n, quoteOut: 1000n, quoteImpactPct: 1, quoteRoute: "x", quoteAt: T0, simLatencyMs: 1, baseFee: 5000n, priorityFee: 2000n, rent: 2_074_080n, fillIn: 200_000_000n, fillOut: 1000n };
+    ledger.recordEntryFill("wasExiting", fill, 1);
+    db.exec("UPDATE positions SET state = 'EXIT_PENDING' WHERE id = 'wasExiting'");
+    const cash = ledger.account()!.cash;
+    expect(ledger.pending()).toHaveLength(2); // both would block new entries forever
+    const r = ledger.recover();
+    expect(r).toEqual({ failedUnresolved: ["stuckProposed"], reopened: ["wasExiting"] });
+    expect(ledger.get("stuckProposed")!.state).toBe("FAILED");
+    expect(ledger.get("stuckProposed")!.realized_pnl_cad).toBe(0);
+    expect(ledger.get("wasExiting")!.state).toBe("OPEN");
+    expect(ledger.pending()).toHaveLength(0);
+    expect(ledger.account()!.cash).toBe(cash); // recovery never moves cash
+    expect(ledger.recover()).toEqual({ failedUnresolved: [], reopened: [] });
+  });
+
+  it("nested transactions roll back together", () => {
+    const { ledger, db } = setup();
+    const cash = ledger.account()!.cash;
+    expect(() =>
+      ledger.atomic(() => {
+        db.prepare("UPDATE paper_account SET cash_lamports = '1' WHERE mode = 'paper'").run();
+        ledger.atomic(() => {
+          throw new Error("inner");
+        });
+      }),
+    ).toThrow(/inner/);
+    expect(ledger.account()!.cash).toBe(cash);
+  });
 });
 
 describe("PaperExecutor", () => {

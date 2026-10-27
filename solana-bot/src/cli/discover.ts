@@ -88,6 +88,8 @@ if (args.includes("--signals")) {
     const fx = new FxService(deps.http, () => deps.clock.now(), { maxUsdCadAgeDays: 5, solUsdCacheMs: 60_000, usdCadCacheMs: 6 * 3_600_000, apiKey: cfg.JUPITER_API_KEY });
     const quotes = new QuoteClient(deps.http, () => deps.clock.now(), cfg.JUPITER_API_KEY);
     const ledger = new Ledger(deps.db, () => deps.clock.now(), paperMode);
+    const recovered = ledger.recover();
+    if (recovered.failedUnresolved.length || recovered.reopened.length) deps.logger.warn("paper ledger recovered after an unclean stop", recovered);
     const riskState = new RiskStateStore(deps.db, () => deps.clock.now());
     // Live priority-fee estimate (median of recent non-zero fees, capped), refreshed every 30 s.
     // Until the first sample arrives, budget for the cap rather than for zero.
