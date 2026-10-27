@@ -17,7 +17,7 @@ import { describeRpc, LIVE_TRADING_ENABLED, loadConfig } from "../core/config.ts
 import { resolve } from "node:path";
 import { TokenRegistry } from "../discovery/registry.ts";
 import { TradeStream } from "../market/tradeStream.ts";
-import { EXPLORE_LIMITS, loadRiskLimits } from "../risk/limits.ts";
+import { DRILL_LIMITS, EXPLORE_LIMITS, loadRiskLimits } from "../risk/limits.ts";
 import { RiskStateStore } from "../risk/riskState.ts";
 import { SessionStore } from "../storage/sessions.ts";
 import { MAX_WATCH_EXPLORE, SignalEngine } from "../strategy/engine.ts";
@@ -53,8 +53,9 @@ let dashboard: Server | undefined;
 let paperTrader: PaperTrader | undefined;
 // --explore: paper only, same money caps, looser entry rules so fills happen and execution can be measured.
 // Positions are stored under mode "paper_explore" and never count toward live eligibility.
-const explore = args.includes("--explore");
-const paperMode: Mode = explore ? "paper_explore" : "paper";
+const drill = args.includes("--drill");
+const explore = args.includes("--explore") || drill;
+const paperMode: Mode = drill ? "paper_drill" : explore ? "paper_explore" : "paper";
 const strategyParamsFile = loadStrategyParams(resolve(cfg.DATA_DIR, "strategy-params.json"));
 const strategyParams = explore && strategyParamsFile.source === "defaults" ? { params: EXPLORE_PARAMS, source: "explore" as const, sha256: undefined, overridden: [] as string[] } : strategyParamsFile;
 let riskLimits = loadRiskLimits(resolve(cfg.DATA_DIR, "risk-limits.json"), resolve(cfg.DATA_DIR, "risk-limits.confirmed"));
@@ -62,6 +63,10 @@ if (explore) {
   if (!args.includes("--paper")) throw new Error("--explore needs --paper");
   riskLimits = { ...riskLimits, limits: { ...riskLimits.limits, minEdgeOverBreakEvenPct: EXPLORE_LIMITS.minEdgeOverBreakEvenPct, minRewardToRisk: EXPLORE_LIMITS.minRewardToRisk } };
   deps.logger.warn("EXPLORE MODE: looser entry rules, paper only; these trades never count toward live eligibility", { minRewardToRisk: riskLimits.limits.minRewardToRisk, minEdgeOverBreakEvenPct: riskLimits.limits.minEdgeOverBreakEvenPct, maxPositionCad: riskLimits.limits.maxPositionCad, dailyLossLimitCad: riskLimits.limits.dailyLossLimitCad });
+}
+if (drill) {
+  riskLimits = { ...riskLimits, limits: { ...DRILL_LIMITS } };
+  deps.logger.warn("DRILL MODE: a forced paper entry every 5 minutes, no strategy; paper only; never counts toward live eligibility", { maxPositionCad: DRILL_LIMITS.maxPositionCad, maxLossPerTradeCad: DRILL_LIMITS.maxLossPerTradeCad, dailyLossLimitCad: DRILL_LIMITS.dailyLossLimitCad });
 }
 if (args.includes("--signals")) {
   if (!assess) throw new Error("--signals needs --assess (the watchlist comes from gate assessments)");
@@ -122,6 +127,7 @@ if (args.includes("--signals")) {
     params: strategyParams.params,
     quality: explore ? EXPLORE_QUALITY : undefined,
     maxWatch: explore ? MAX_WATCH_EXPLORE : undefined,
+    drillEveryMs: drill ? 5 * 60_000 : undefined,
     trader: paper?.trader,
     ledger: paper?.ledger,
     fx: paper?.fx,
@@ -151,7 +157,7 @@ function age(ms?: number): string {
 function printStatus(): void {
   const s = svc.status();
   const lines: string[] = [];
-  lines.push(`\n=== discovery ${new Date(s.now).toISOString()}  mode=${explore ? "PAPER-EXPLORE" : "PAPER-RESEARCH"} live=${LIVE_TRADING_ENABLED ? "ON" : "OFF"} ===`);
+  lines.push(`\n=== discovery ${new Date(s.now).toISOString()}  mode=${drill ? "PAPER-DRILL" : explore ? "PAPER-EXPLORE" : "PAPER-RESEARCH"} live=${LIVE_TRADING_ENABLED ? "ON" : "OFF"} ===`);
   lines.push(`gate: ${s.gate.open ? "OPEN" : "CLOSED"}${s.gate.reasons.length ? "  (" + s.gate.reasons.join("; ") + ")" : ""}`);
   for (const h of s.health) {
     if (h.provider === "dexscreener") continue;

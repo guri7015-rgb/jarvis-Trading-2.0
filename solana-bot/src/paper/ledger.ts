@@ -11,8 +11,12 @@
 import type { DatabaseSync } from "node:sqlite";
 import { tx } from "../storage/db.ts";
 
-/** `paper` counts toward live evidence. `paper_explore` runs looser entry rules to measure execution and never counts. */
-export type Mode = "paper" | "paper_explore";
+/**
+ * `paper` counts toward live evidence. `paper_explore` runs looser entry rules
+ * to measure execution. `paper_drill` forces an entry every few minutes with no
+ * strategy at all. Neither of the last two ever counts.
+ */
+export type Mode = "paper" | "paper_explore" | "paper_drill";
 export type PositionState = "PROPOSED" | "ENTRY_PENDING" | "OPEN" | "EXIT_PENDING" | "CLOSED" | "STUCK" | "FAILED";
 export const SOFTWARE_VERSION = "0.5.0";
 

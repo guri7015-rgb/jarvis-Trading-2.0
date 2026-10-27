@@ -58,6 +58,22 @@ export const EXPLORE_LIMITS: RiskLimits = {
   minRewardToRisk: 1.0,
 };
 
+/**
+ * Drill mode (paper only, started by the owner on purpose): a forced paper entry
+ * every few minutes to exercise fills and exits. The edge floors are off, the
+ * entry count is effectively unlimited and the daily paper loss cap is CAD 25
+ * so a session lasts long enough to produce data. Position size and loss per
+ * trade are unchanged. Nothing from this mode counts toward live eligibility.
+ */
+export const DRILL_LIMITS: RiskLimits = {
+  ...DEFAULT_LIMITS,
+  minEdgeOverBreakEvenPct: -1,
+  minRewardToRisk: 0,
+  maxEntriesPerDay: 500,
+  maxConsecutiveLosses: 500,
+  dailyLossLimitCad: 25,
+};
+
 /** For each limit: does a bigger number mean more risk? */
 const HIGHER_IS_LOOSER: Record<keyof RiskLimits, boolean> = {
   referenceEquityCad: true,

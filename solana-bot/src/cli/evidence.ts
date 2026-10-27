@@ -27,8 +27,10 @@ const rows = db.prepare("SELECT strategy, state, opened_at, closed_at, cost_basi
   strategy: string; state: string; opened_at: number | null; closed_at: number | null; cost_basis_lamports: string; proceeds_lamports: string; realized_pnl_lamports: string | null; realized_pnl_cad: number | null; sol_cad_at_entry: number | null;
 }[];
 const explore = db.prepare("SELECT COUNT(*) n, SUM(state='FAILED') failed, SUM(realized_pnl_cad) pnl FROM positions WHERE mode = 'paper_explore' AND state IN ('CLOSED','FAILED','STUCK')").get() as { n: number; failed: number | null; pnl: number | null };
+const drill = db.prepare("SELECT COUNT(*) n, SUM(state='FAILED') failed, SUM(realized_pnl_cad) pnl FROM positions WHERE mode = 'paper_drill' AND state IN ('CLOSED','FAILED','STUCK')").get() as { n: number; failed: number | null; pnl: number | null };
 
 const out: string[] = [`# Promotion evidence — ${rows.length} resolved paper positions — ${new Date().toISOString()}`];
+if (drill.n) out.push(`\nDrill mode: ${drill.n} forced entries (${drill.failed ?? 0} failed), net ${(drill.pnl ?? 0) >= 0 ? "+" : ""}CAD ${(drill.pnl ?? 0).toFixed(2)}. No strategy; NOT counted below.`);
 if (explore.n) out.push(`\nExplore mode: ${explore.n} resolved positions (${explore.failed ?? 0} failed entries), net ${(explore.pnl ?? 0) >= 0 ? "+" : ""}CAD ${(explore.pnl ?? 0).toFixed(2)}. Looser entry rules; NOT counted below.`);
 const byStrategy = new Map<string, typeof rows>();
 for (const r of rows) (byStrategy.get(r.strategy) ?? byStrategy.set(r.strategy, []).get(r.strategy)!).push(r);

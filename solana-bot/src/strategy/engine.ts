@@ -62,6 +62,8 @@ export interface EngineDeps {
   quality?: QualityRules;
   /** Watchlist size; defaults to MAX_WATCH. */
   maxWatch?: number;
+  /** Drill: force a paper entry on the cheapest fresh-PASS watched coin every this many ms when nothing is open. */
+  drillEveryMs?: number;
 }
 
 interface Watched {
@@ -291,6 +293,7 @@ export class SignalEngine {
     const trader = this.d.trader;
     if (!trader) return;
     const fx = await this.fx();
+    if (this.d.drillEveryMs) this.drill(out, features);
     for (const r of out) {
       if (!r.decision.approved || !fx) continue;
       const t = this.d.registry.get(r.mint);
@@ -327,6 +330,50 @@ export class SignalEngine {
     } catch {
       /* account not initialised yet */
     }
+  }
+
+  private lastDrillAt = 0;
+
+  /**
+   * Drill entry: no setup required. Every `drillEveryMs`, if no position is open,
+   * propose a fixed plan on the watched coin with the cheapest fresh PASS and
+   * push it through the normal risk gates and the normal exits. Pure execution test.
+   */
+  private drill(out: { mint: string; signal: Signal; decision: RiskDecision }[], features: Map<string, Features>): void {
+    const now = this.d.clock.now();
+    if (now - this.lastDrillAt < this.d.drillEveryMs!) return;
+    if (this.ledgerOpen().length > 0 || (this.d.ledger?.pending().length ?? 0) > 0) return;
+    if (out.some((r) => r.decision.approved)) return;
+    const candidates = [...this.watch.keys()]
+      .map((mint) => ({ mint, a: this.assessment(mint), f: features.get(mint) }))
+      .filter((c) => c.a && c.a.verdict === "PASS" && now - c.a.at <= this.d.limits.maxAssessmentAgeMs && c.a.totalCostBps !== null && c.f?.last)
+      .sort((x, y) => x.a!.totalCostBps! - y.a!.totalCostBps!);
+    const c = candidates[0];
+    if (!c) return;
+    this.lastDrillAt = now;
+    const last = c.f!.last!;
+    const signal: Signal = {
+      strategy: "DRILL",
+      action: "ENTER",
+      reasons: ["drill: forced entry, no setup"],
+      refPrice: last,
+      maxEntryPrice: last * 1.03,
+      invalidationPrice: last * 0.95,
+      targetPrice: last * 1.08,
+      expectedMovePct: 0.08,
+      timeStopMs: 10 * 60_000,
+      cooldownMs: this.d.drillEveryMs!,
+    };
+    const gate = this.d.health.gate();
+    const decision = decideEntry(
+      { now, signal, failure: { action: "NONE", reasons: [] }, feedsHealthy: gate.open, feedReasons: gate.reasons, quality: c.f!.quality, assessment: c.a, lastPrice: last, state: this.d.riskState.today(), openPositions: 0, pendingOrders: 0, openRiskCad: 0, limitsRefused: this.d.limitsRefused },
+      this.d.limits,
+    );
+    this.stats.signals++;
+    if (decision.approved) this.stats.approved++;
+    else this.stats.rejected++;
+    this.record(now, c.mint, "DRILL", decision.approved ? "PAPER_ELIGIBLE" : "REJECT", decision.approved ? signal.reasons : [`${decision.firstFailure}: ${decision.steps.find((x) => !x.ok)?.detail ?? ""}`], signal, decision, c.f);
+    out.push({ mint: c.mint, signal, decision });
   }
 
   private evaluate(): { out: { mint: string; signal: Signal; decision: RiskDecision }[]; features: Map<string, Features> } {

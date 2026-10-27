@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { parseTradeLogs } from "../src/market/eventDecoder.ts";
-import { DEFAULT_LIMITS, EXPLORE_LIMITS, loadRiskLimits } from "../src/risk/limits.ts";
+import { DEFAULT_LIMITS, DRILL_LIMITS, EXPLORE_LIMITS, loadRiskLimits } from "../src/risk/limits.ts";
 import { decideEntry, type RiskInput } from "../src/risk/manager.ts";
 import { RiskStateStore } from "../src/risk/riskState.ts";
 import { decodePumpSwapPool } from "../src/solana/pumpSwapPool.ts";
@@ -256,6 +256,28 @@ describe("explore limits", () => {
     for (const k of money) expect(EXPLORE_LIMITS[k]).toBe(DEFAULT_LIMITS[k]);
     expect(EXPLORE_LIMITS.minRewardToRisk).toBeLessThan(DEFAULT_LIMITS.minRewardToRisk);
     expect(EXPLORE_LIMITS.minEdgeOverBreakEvenPct).toBeLessThan(DEFAULT_LIMITS.minEdgeOverBreakEvenPct);
+  });
+});
+
+describe("drill limits", () => {
+  it("keep position size, loss per trade and stress identical; a forced 8% plan clears the gates and sizes under CAD 25", () => {
+    for (const k of ["maxPositionCad", "minPositionCad", "maxLossPerTradeCad", "maxOpenPositions", "stressPct", "maxAssessmentAgeMs"] as const) expect(DRILL_LIMITS[k]).toBe(DEFAULT_LIMITS[k]);
+    const last = 1.01;
+    const b: RiskInput = {
+      now: T, failure: { action: "NONE", reasons: [] }, feedsHealthy: true, feedReasons: [],
+      quality: { ok: true, reasons: [], trades180s: 50, secondsSinceLastTrade: 1, medianLagS: 1, inGap: false, warnings: [] },
+      assessment: { at: T - 30_000, verdict: "PASS", researchOnly: false, totalCostBps: 300, breakEvenPct: 3.1, sizeCad: 30, solCad: 140 },
+      lastPrice: last, state: { day: "2026-10-26", realizedLossCad: 0, entries: 0, consecutiveLosses: 0, haltedReason: null },
+      openPositions: 0, pendingOrders: 0, openRiskCad: 0, limitsRefused: [],
+      signal: { strategy: "DRILL", action: "NONE", reasons: [], cooldownMs: 1 },
+    };
+    const s: Signal = { strategy: "DRILL", action: "ENTER", reasons: [], refPrice: last, maxEntryPrice: last * 1.03, invalidationPrice: last * 0.95, targetPrice: last * 1.08, expectedMovePct: 0.08, timeStopMs: 600_000, cooldownMs: 1 };
+    const d = decideEntry({ ...b, signal: s, assessment: { ...b.assessment!, totalCostBps: 400, breakEvenPct: 4 } }, DRILL_LIMITS);
+    expect(d.approved).toBe(true);
+    expect(d.sizeCad!).toBeLessThanOrEqual(25);
+    expect(d.plannedLossCad!).toBeLessThanOrEqual(2.5);
+    // The same plan fails the real rules.
+    expect(decideEntry({ ...b, signal: s, assessment: { ...b.assessment!, totalCostBps: 400, breakEvenPct: 4 } }, DEFAULT_LIMITS).firstFailure).toBe("COSTS");
   });
 });
 

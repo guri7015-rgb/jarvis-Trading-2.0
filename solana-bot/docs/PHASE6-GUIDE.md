@@ -37,6 +37,16 @@ What it does not change: position size, loss per trade, daily loss, entries per 
 
 Positions are stored under mode `paper_explore`. `npm run evidence` reports them on one line and excludes them from eligibility. Expect them to lose money on average; the point is the fill data, not the P&L.
 
+## Drill mode: a forced paper trade every 5 minutes
+
+For exercising fills and exits only. No strategy. Every 5 minutes, if nothing is open, the bot buys a paper position in the watched coin with the cheapest fresh PASS, with a fixed plan: stop 5% below, target 8% above, 10-minute time stop, the normal D veto and liquidity exits.
+
+```bash
+caffeinate -i npm run discover -- --assess --signals --paper --drill --dashboard
+```
+
+Same position size (CAD 35 max) and planned loss per trade (CAD 2.50). The entry count is unlimited and the paper daily loss cap is CAD 25, so a session lasts long enough to produce data. Expect it to lose steadily: every entry pays the round trip with no edge behind it. Positions are stored under mode `paper_drill` and never count toward anything.
+
 ## What has to be true before Phase 7
 
 - At least one strategy with 100+ resolved forward-paper trades, positive expectancy after costs that survives fills 1% worse, a 95% lower bound above zero, drawdown and largest loss inside limits, spread over 5+ days. `npm run evidence` checks all of it.
