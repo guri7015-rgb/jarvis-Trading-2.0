@@ -21,7 +21,8 @@
     "calibrate": "tsx src/cli/calibrate.ts",
     "tape": "tsx src/cli/tape.ts",
     "tune": "tsx src/cli/tune.ts",
-    "evidence": "tsx src/cli/evidence.ts"
+    "evidence": "tsx src/cli/evidence.ts",
+    "why": "tsx src/cli/why.ts"
   },
   "dependencies": {
     "@solana/kit": "8.4.0",
