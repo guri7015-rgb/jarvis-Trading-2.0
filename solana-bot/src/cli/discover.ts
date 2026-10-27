@@ -32,6 +32,9 @@ import { EXPLORE_PARAMS, EXPLORE_QUALITY, loadStrategyParams } from "../strategy
 import { startDashboard } from "../dashboard/server.ts";
 import { dashboardState, shownMints } from "../dashboard/state.ts";
 import { TokenMetaService } from "../discovery/tokenMeta.ts";
+import { MoverScanner, type Mover } from "../market/firehose.ts";
+import { decodePumpSwapPool } from "../solana/pumpSwapPool.ts";
+import { PROGRAMS, MINTS } from "../solana/programs.ts";
 import type { Server } from "node:http";
 
 const args = process.argv.slice(2);
@@ -44,7 +47,74 @@ const deps = buildDeps(cfg);
 // --assess: also run the Phase 3 tradability assessor (read-only quotes).
 const assess = args.includes("--assess");
 const assessor = assess ? buildAssessor(deps) : undefined;
-const svc = new DiscoveryService({ ...deps, assessor });
+// --scan: one firehose over pump.fun and PumpSwap, ranked in memory; movers go to the fast safety lane.
+const scan = args.includes("--scan");
+if (scan && !assess) throw new Error("--scan needs --assess");
+let scanner: MoverScanner | undefined;
+/** Latest ranked movers with their mint (PumpSwap pools resolved on-chain, cached), for the dashboard and the engine. */
+let moversNow: (Mover & { mint?: string; status: string })[] = [];
+const poolMint = new Map<string, string | null>();
+let scanTimer: NodeJS.Timeout | undefined;
+if (scan) {
+  deps.health.register("solana_firehose", { kind: "stream", maxSilenceMs: 60_000, required: false });
+  scanner = new MoverScanner({ url: cfg.SOLANA_WS_URL, factory: deps.wsFactory, clock: deps.clock, health: deps.health, logger: deps.logger });
+  const registry = new TokenRegistry(deps.db);
+  const resolveMint = async (m: Mover): Promise<string | undefined> => {
+    if (m.venue === "pump_curve") return m.key;
+    if (poolMint.has(m.key)) return poolMint.get(m.key) ?? undefined;
+    const row = deps.db.prepare("SELECT mint FROM pools WHERE pool = ?").get(m.key) as { mint: string } | undefined;
+    if (row) {
+      poolMint.set(m.key, row.mint);
+      return row.mint;
+    }
+    if (!deps.budget.tryConsume(1)) return undefined;
+    try {
+      const r = await deps.rpc.getMultipleAccounts([m.key]);
+      const a = r.accounts[0];
+      if (!a || a.owner !== PROGRAMS.PUMPSWAP) {
+        poolMint.set(m.key, null);
+        return undefined;
+      }
+      const p = decodePumpSwapPool(a.data);
+      if (p.quoteMint !== MINTS.WSOL) {
+        poolMint.set(m.key, null);
+        return undefined;
+      }
+      poolMint.set(m.key, p.baseMint);
+      registry.ingest({ kind: "pool_observed", provider: "solana_firehose", providerEventId: `scan:${m.key}`, dedupeKey: `pool:${m.key}`, receivedAt: deps.clock.now(), evidence: "ONCHAIN_CONFIRMED", mint: p.baseMint, venue: "pumpswap", venueRaw: "pumpswap", pool: m.key, quoteMint: p.quoteMint });
+      // Every pump.fun mint ends in "pump" (vanity suffix): that is its launch venue, derived, not provider-reported.
+      if (p.baseMint.endsWith("pump") && !registry.get(p.baseMint)?.launch_venue) {
+        registry.ingest({ kind: "token_created", provider: "solana_firehose", providerEventId: `scan-launch:${p.baseMint}`, dedupeKey: `create:${p.baseMint}`, receivedAt: deps.clock.now(), evidence: "DERIVED", mint: p.baseMint, venue: "pump_curve", venueRaw: "pump suffix" });
+      }
+      return p.baseMint;
+    } catch {
+      return undefined;
+    }
+  };
+  const scanTick = async () => {
+    const now = deps.clock.now();
+    const top = scanner!.movers(now, 10);
+    const out: typeof moversNow = [];
+    for (const m of top) {
+      const mint = await resolveMint(m);
+      let status = "resolving";
+      if (mint) {
+        if (m.venue === "pump_curve" && !registry.get(mint)) {
+          registry.ingest({ kind: "token_created", provider: "solana_firehose", providerEventId: `scan:${mint}`, dedupeKey: `create:${mint}`, receivedAt: now, evidence: "ONCHAIN_CONFIRMED", mint, venue: "pump_curve", venueRaw: "pump_curve" });
+        }
+        const a = deps.db.prepare("SELECT verdict, at FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1").get(mint) as { verdict: string; at: number } | undefined;
+        const watched = engine?.watched().some((w) => w.mint === mint) ?? false;
+        const t = registry.get(mint);
+        status = watched ? "watching" : a ? `${a.verdict} ${Math.round((now - a.at) / 1000)}s ago` : t?.confirm_status !== "CONFIRMED" ? `queued (${t?.confirm_status ?? "new"})` : !t.launch_venue ? "skipped: not a launchpad token" : "queued";
+        if (!a || now - a.at > 90_000) assessor!.addFast(mint, "scanner");
+      } else if (poolMint.get(m.key) === null) status = "not SOL-quoted";
+      out.push({ ...m, mint, status });
+    }
+    moversNow = out;
+  };
+  scanTimer = setInterval(() => void scanTick().catch((e) => deps.logger.warn("scan tick failed", { err: (e as Error).message })), 5_000);
+}
+const svc = new DiscoveryService({ ...deps, assessor, assessIntervalMs: args.includes("--scan") ? 10_000 : undefined });
 
 let engine: SignalEngine | undefined;
 let stream: TradeStream | undefined;
@@ -145,6 +215,8 @@ if (args.includes("--signals")) {
     params: strategyParams.params,
     quality: explore ? EXPLORE_QUALITY : undefined,
     maxWatch: explore ? MAX_WATCH_EXPLORE : undefined,
+    hot: scanner ? () => new Set(moversNow.map((m) => m.mint).filter((m): m is string => !!m)) : undefined,
+    backfill: scanner ? (key) => scanner!.recent(key) : undefined,
     drillEveryMs: drill ? drillEveryMs : undefined,
     drillHoldMs: drill ? drillHoldMs : undefined,
     drillUnsafe,
@@ -188,6 +260,10 @@ function printStatus(): void {
   lines.push(`confirm: ${JSON.stringify(s.confirm)}  rpc budget used today=${s.rpcBudget.usedToday} left=${s.rpcBudget.remaining}  slot=${s.lastSlot ?? "?"}`);
   lines.push(`stream: ${JSON.stringify(s.stream)}`);
   if (s.assess) lines.push(`assess: ${JSON.stringify(s.assess)}`);
+  if (scanner) {
+    lines.push(`scan: ${JSON.stringify(scanner.stats)}`);
+    for (const m of moversNow.slice(0, 5)) lines.push(`  mover ${(m.mint ?? m.key).slice(0, 8)} ${m.venue.padEnd(10)} trades60=${m.trades60} buyers=${m.buyers60} net=${(m.buySol60 - m.sellSol60).toFixed(2)} SOL ret60=${(m.ret60 * 100).toFixed(1)}% ${m.status}`);
+  }
   if (engine && stream) {
     lines.push(`signals: ${JSON.stringify(engine.stats)}`);
     if (paperLedger) {
@@ -216,6 +292,7 @@ if (args.includes("--dashboard")) {
     marks: () => paperTrader?.marks() ?? new Map(),
     watched: () => engine?.watched() ?? [],
     rpcBudget: () => ({ usedToday: deps.budget.usedToday, remaining: deps.budget.remaining }),
+    movers: scanner ? () => ({ list: moversNow, stats: scanner!.stats }) : undefined,
     now: () => deps.clock.now(),
   };
   dashboard = startDashboard(dashDeps, deps.logger, pIdx >= 0 ? Number(args[pIdx + 1]) : 4777);
@@ -228,6 +305,7 @@ if (args.includes("--dashboard")) {
 deps.logger.info("starting discovery", { rpc: describeRpc(cfg.SOLANA_RPC_URL), jupiterKey: cfg.JUPITER_API_KEY ? "set" : "keyless", dataDir: cfg.DATA_DIR });
 svc.start();
 stream?.start();
+scanner?.start();
 engine?.start();
 const timer = setInterval(printStatus, statusEveryMs);
 
@@ -240,6 +318,8 @@ function shutdown(signal: string): void {
   if (metaTimer) clearInterval(metaTimer);
   engine?.stop();
   stream?.stop();
+  scanner?.stop();
+  if (scanTimer) clearInterval(scanTimer);
   dashboard?.close();
   svc.stop();
   printStatus();

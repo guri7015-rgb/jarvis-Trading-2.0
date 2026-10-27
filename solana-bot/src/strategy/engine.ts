@@ -62,6 +62,10 @@ export interface EngineDeps {
   quality?: QualityRules;
   /** Watchlist size; defaults to MAX_WATCH. */
   maxWatch?: number;
+  /** Scanner movers (mints) that should be watched ahead of everything else. */
+  hot?: () => Set<string>;
+  /** Recent ticks the scanner already holds for a key, so a new watch starts with history instead of waiting 3 minutes. */
+  backfill?: (key: string) => { t: number; side: "buy" | "sell"; wallet: string; sol: number; price: number }[];
   /** Drill: force a paper entry on the cheapest fresh-PASS watched coin every this many ms when nothing is open. */
   drillEveryMs?: number;
   /** Drill: time stop for each forced position. Default 10 minutes. */
@@ -184,7 +188,8 @@ export class SignalEngine {
       .all(now - ASSESSMENT_LOOKBACK_MS) as { mint: string; verdict: string; rejects: string; total_cost_bps: number | null }[];
     const seen = new Set<string>();
     const latest = rows.filter((r) => (seen.has(r.mint) ? false : (seen.add(r.mint), true)));
-    latest.sort((a, b) => (a.total_cost_bps ?? 1e9) - (b.total_cost_bps ?? 1e9));
+    const hot = this.d.hot?.() ?? new Set<string>();
+    latest.sort((a, b) => Number(hot.has(b.mint)) - Number(hot.has(a.mint)) || (a.total_cost_bps ?? 1e9) - (b.total_cost_bps ?? 1e9));
     for (const r of latest) {
       if (this.watch.size >= maxWatch) break;
       if (this.watch.has(r.mint)) continue;
@@ -196,9 +201,27 @@ export class SignalEngine {
       const t = this.d.registry.get(r.mint);
       this.watch.set(r.mint, { target, addedAt: now, researchOnly, decimals: t?.decimals ?? 6 });
       this.d.stream.add(target);
+      this.backfillFromScanner(r.mint, target);
       this.stats.watchAdds++;
       this.d.logger.info("watching", { mint: r.mint, venue: target.venue, researchOnly });
     }
+  }
+
+  /** Seed the trades table from the scanner's buffer so features exist from the first tick. Synthetic signatures, flagged as such. */
+  private backfillFromScanner(mint: string, target: WatchTarget): void {
+    const ticks = this.d.backfill?.(target.venue === "pump_curve" ? mint : target.account) ?? [];
+    if (!ticks.length) return;
+    const ins = this.d.db.prepare(
+      `INSERT OR IGNORE INTO trades (mint, venue, signature, event_index, slot, block_time_ms, received_at, side, wallet, quote_amount, token_amount, price_sol, real_quote_reserves)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    );
+    let n = 0;
+    ticks.forEach((x, i) => {
+      const tokens = x.price > 0 ? BigInt(Math.floor((x.sol / x.price) * 1e6)) : 0n;
+      n += Number(ins.run(mint, target.venue, `scanner:${mint.slice(0, 8)}:${x.t}:${i}`, i, 0, x.t, x.t, x.side, x.wallet, BigInt(Math.floor(x.sol * 1e9)).toString(), tokens.toString(), x.price).changes);
+    });
+    this.stats.tradesStored += n;
+    this.d.logger.info("backfilled watch from scanner", { mint, ticks: n });
   }
 
   /** Where this token trades now, checked on-chain: its live curve, or its PumpSwap pool. */

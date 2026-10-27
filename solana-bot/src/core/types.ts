@@ -23,6 +23,7 @@ export type ProviderId =
   | "dexscreener"
   | "solana_rpc"
   | "solana_ws"
+  | "solana_firehose"
   | "bankofcanada";
 
 /**

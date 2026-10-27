@@ -22,6 +22,8 @@ export interface DashboardDeps {
   marks?: () => Map<string, bigint>;
   watched?: () => { mint: string; venue: string; researchOnly: boolean; addedAt: number }[];
   rpcBudget?: () => { usedToday: number; remaining: number };
+  /** Scanner movers and firehose stats, when --scan is on. */
+  movers?: () => { list: { key: string; mint?: string; venue: string; status: string; firstSeenAt: number; lastTradeAt: number; trades60: number; trades15: number; buyers60: number; sellers60: number; buySol60: number; sellSol60: number; ret60: number; score: number }[]; stats: Record<string, number> };
   /** Label shown in the top bar: PAPER, or PAPER EXPLORE. */
   mode?: string;
   now: () => number;
@@ -150,6 +152,7 @@ export function dashboardState(d: DashboardDeps) {
 
   const events = q<{ at: number; mint: string; strategy: string; action: string; reasons: string }>("SELECT at, mint, strategy, action, reasons FROM decisions WHERE action != 'SNAPSHOT' ORDER BY at DESC LIMIT 20").map((e) => ({ ...e, reasons: JSON.parse(e.reasons) as string[] }));
 
+  const movers = d.movers?.() ?? null;
   const watchlist = d.watched?.() ?? [];
   const watchedSet = new Set(watchlist.map((w) => w.mint));
   // One row per coin checked in the last 24 h: its NEWEST verdict, when, why, and how often it has passed.
@@ -175,7 +178,7 @@ export function dashboardState(d: DashboardDeps) {
     rules: (JSON.parse(r.rejects) as { rule: string; observed: string; limit: string }[]).map((x) => `${x.rule} (${x.observed}; limit ${x.limit})`),
   }));
 
-  const shownMints = [...recentTokens, ...rejections, ...eligible, ...open, ...watchlist, ...events, ...review].map((x) => x.mint);
+  const shownMints = [...recentTokens, ...rejections, ...eligible, ...open, ...watchlist, ...events, ...review].map((x) => x.mint).concat((movers?.list ?? []).map((m) => m.mint).filter((m): m is string => !!m));
   const meta: Record<string, { name: string | null; symbol: string | null; icon: string | null }> = {};
   const chunk = [...new Set(shownMints)];
   if (chunk.length) {
@@ -188,6 +191,7 @@ export function dashboardState(d: DashboardDeps) {
     meta,
     review,
     performance,
+    movers,
     now,
     mode: d.mode ?? "PAPER",
     liveTradingEnabled: LIVE_TRADING_ENABLED,

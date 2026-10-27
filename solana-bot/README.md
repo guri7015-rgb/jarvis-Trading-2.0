@@ -35,6 +35,7 @@ npm run replay                                       # strategies over the recor
 npm run discover -- --assess --signals --paper --dashboard   # paper trading with the local dashboard at http://127.0.0.1:4777
 npm run discover -- --assess --signals --paper --explore --dashboard   # same money caps, looser entry rules; measures execution, never counts as evidence
 npm run discover -- --assess --signals --paper --drill --dashboard     # forced paper entry every 5 min, no strategy; exercises fills and exits only
+npm run discover -- --assess --signals --paper --explore --scan --dashboard   # plus the firehose scanner: movers found within seconds, fast-laned into the safety check
 npm run backtest                                     # recorded tapes with modelled fills, split train/validation/test
 npm run export                                       # positions.csv and orders.csv for your records
 npm run calibrate                                    # where recorded data sits against each threshold

@@ -37,6 +37,18 @@ What it does not change: position size, loss per trade, daily loss, entries per 
 
 Positions are stored under mode `paper_explore`. `npm run evidence` reports them on one line and excludes them from eligibility. Expect them to lose money on average; the point is the fill data, not the P&L.
 
+## Scanner: seeing a move within seconds
+
+The normal pipeline subscribes to a coin's trades only after it passes the safety check, then waits for 3 minutes of history. That is why signals were minutes late. `--scan` adds one firehose over the whole pump.fun and PumpSwap programs, ranks every coin's last 60 seconds in memory, and pushes the top movers into a fast lane of the safety check. When a mover is watched, its last 3 minutes of trades are backfilled from the scanner, so strategies can judge it on the first tick.
+
+```bash
+caffeinate -i npm run discover -- --assess --signals --paper --explore --scan --dashboard
+```
+
+Mover rules (`DEFAULT_SCANNER_RULES`): at least 12 trades and 8 distinct buyers in 60 s, net buying of 0.3 SOL or more, price up 3% to 80% over 60 s, at least 3 trades in the last 15 s. The dashboard shows the top 10 with their status in the pipeline.
+
+Load measured on the free public RPC: about 700 transactions a second, two-thirds of them failed bot transactions, 157 MB of memory. Watch your Helius usage the first day; the scanner's WebSocket traffic is separate from the daily RPC call budget the bot counts.
+
 ## Drill mode: a forced paper trade every 5 minutes
 
 For exercising fills and exits only. No strategy. Every 5 minutes, if nothing is open, the bot buys a paper position in the watched coin with the cheapest fresh PASS, with a fixed plan: stop 5% below, target 8% above, 10-minute time stop, the normal D veto and liquidity exits.

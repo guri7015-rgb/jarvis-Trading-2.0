@@ -104,8 +104,34 @@ export class Assessor {
    * Rotates through liquidity bands so small new tokens get sampled, not only
    * the deepest pools (which would make costs look better than they are).
    */
+  /** Fast lane: a mover from the scanner is assessed before the rotation, once it is confirmed on-chain. */
+  private fast: string[] = [];
+  addFast(mint: string, source: string): void {
+    if (this.fast.includes(mint)) return;
+    this.fast.push(mint);
+    if (this.fast.length > 20) this.fast.shift();
+    if (!this.candidates.has(mint)) this.candidates.set(mint, { mint, source, addedAt: this.d.clock.now() });
+  }
+
   private pick(): Candidate | undefined {
     const now = this.d.clock.now();
+    for (const mint of [...this.fast]) {
+      const c = this.candidates.get(mint);
+      const t = this.d.registry.get(mint);
+      if (!c || !t) {
+        this.fast = this.fast.filter((m) => m !== mint);
+        continue;
+      }
+      if (t.confirm_status === "PENDING") continue;
+      this.fast = this.fast.filter((m) => m !== mint);
+      if (t.confirm_status !== "CONFIRMED" || !t.launch_venue || !LAUNCH_VENUES.has(t.launch_venue)) {
+        this.candidates.delete(mint);
+        continue;
+      }
+      const last = this.d.db.prepare("SELECT recheck_after FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1").get(mint) as { recheck_after: number } | undefined;
+      if (last && last.recheck_after > now) continue;
+      return c;
+    }
     const band = (c: Candidate) => liquidityBand(c.liquidityUsd);
     const start = this.bandTurn++ % BANDS;
     const ordered = [...this.candidates.values()].sort((a, b) => {

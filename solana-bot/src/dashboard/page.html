@@ -114,6 +114,11 @@
     </div>
   </div>
 
+  <div class="card" id="moversCard" hidden>
+    <h2>Movers right now <span class="count" id="moversCount">0</span> <span class="note" id="moversStats" style="margin:0;font-weight:400;text-transform:none;letter-spacing:0"></span></h2>
+    <div class="scroll"><table id="movers"></table></div>
+  </div>
+
   <div class="card c4">
     <h2>Watching <span class="count" id="watchCount">0</span></h2>
     <table id="watch"></table>
@@ -236,6 +241,13 @@ function render(s) {
   const maxRule = Math.max(1, ...a.ruleCounts.map((x) => x[1]));
   $("rules").innerHTML = a.ruleCounts.length ? a.ruleCounts.slice(0, 10).map(([k, v]) => `<div class="row"><div><div class="mono">${esc(k)}</div><div class="bar"><i style="width:${Math.round(100 * v / maxRule)}%"></i></div></div><div class="num">${v}</div></div>`).join("") : `<div class="empty">No assessments in the last 24 h.</div>`;
 
+  $("moversCard").hidden = !s.movers;
+  if (s.movers) {
+    const L = s.movers.list, st = s.movers.stats;
+    $("moversCount").textContent = L.length;
+    $("moversStats").textContent = `firehose: ${st.messages} txs seen, ${st.failedTxs} failed, ${st.keys} coins tracked`;
+    $("movers").innerHTML = L.length ? `<tr><th>Coin</th><th>Venue</th><th class="num">Trades 60s</th><th class="num">Buyers</th><th class="num">Net SOL</th><th class="num">Move 60s</th><th>Seen</th><th>Status</th></tr>` + L.map((m) => `<tr><td>${m.mint ? tok(m.mint) : `<span class="mono">${esc(short(m.key))}</span>`}</td><td>${esc(venue(m.venue))}</td><td class="num">${m.trades60} <span class="reasons">(${m.trades15} in 15s)</span></td><td class="num">${m.buyers60}</td><td class="num ${sign(m.buySol60 - m.sellSol60)}">${(m.buySol60 - m.sellSol60).toFixed(2)}</td><td class="num ${sign(m.ret60)}">${(m.ret60 * 100).toFixed(1)}%</td><td>${ago(m.firstSeenAt, now)}</td><td>${pill(m.status === "watching" ? true : m.status.startsWith("PASS") ? true : m.status.startsWith("REJECT") || m.status === "not SOL-quoted" ? false : null, m.status)}</td></tr>`).join("") : empty(8, "Nothing moving right now by the scanner's rules.");
+  }
   $("watchCount").textContent = s.watchlist.length;
   $("watch").innerHTML = s.watchlist.length ? `<tr><th>Token</th><th>Venue</th><th>Since</th></tr>` + s.watchlist.map((w) => `<tr><td>${tok(w.mint)}</td><td>${esc(venue(w.venue))}${w.researchOnly ? " " + pill(null, "research") : ""}</td><td>${ago(w.addedAt, now)}</td></tr>`).join("") : empty(3, "Nothing on the watchlist.");
   $("reviewCount").textContent = s.review.length;
