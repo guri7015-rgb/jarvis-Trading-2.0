@@ -53,8 +53,9 @@ for (const r of q<{ strategy: string; action: string; n: number }>("SELECT strat
   out.push(`  ${r.strategy.padEnd(22)} ${r.action.padEnd(15)} ${r.n}`);
 out.push("\n## First failing risk gate for rejected signals");
 const firsts = new Map<string, number>();
-for (const r of q<{ risk_json: string }>("SELECT risk_json FROM decisions WHERE action='REJECT' AND at >= ?", since)) {
-  const k = (JSON.parse(r.risk_json) as { firstFailure?: string }).firstFailure ?? "?";
+for (const r of q<{ risk_json: string | null; reasons: string }>("SELECT risk_json, reasons FROM decisions WHERE action='REJECT' AND at >= ?", since)) {
+  // Drill "no coin ready" rows carry no risk decision; their reason text says why.
+  const k = r.risk_json ? ((JSON.parse(r.risk_json) as { firstFailure?: string }).firstFailure ?? "?") : ((JSON.parse(r.reasons) as string[])[0] ?? "?").split(":")[0]!;
   firsts.set(k, (firsts.get(k) ?? 0) + 1);
 }
 for (const [k, v] of [...firsts].sort((a, b) => b[1] - a[1])) out.push(`  ${k.padEnd(15)} ${v}`);
