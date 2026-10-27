@@ -53,9 +53,12 @@ Load measured on the free public RPC: about 700 transactions a second, two-third
 
 A dark screen meant to stay open. Runs whenever `--signals` and `--dashboard` are on.
 
-- **Entry now.** Setups that cleared every gate. The card flashes green for 12 seconds and beeps (turn sound on once with the button; the browser needs a click). Entry-up-to, stop, target, size, planned loss, reward-to-risk.
-- **Setups blocked by cost or limits.** Valid pattern, failed the cost gate or a daily limit. Amber. Shown so the pattern can be judged without being told to buy.
-- **Majors: long / short plans.** BTC, ETH, SOL, XRP, DOGE, ADA, AVAX, LINK on hourly Coinbase candles (public, no key). A close above the last 20 hours' high on 1.3x volume is a LONG plan, below the low a SHORT. Stop 2 x ATR(14), target 2 x the stop, size for CAD 2.50 of risk. Plans, not trades; a SHORT plan on a venue where you cannot short means "do not be long". `--no-majors` turns it off.
+- **Market right now.** One word (RISK ON, MIXED, RISK OFF) from how many of the 8 big coins are up over 24 h, plus BTC, ETH and SOL moves and how busy the meme market is. Price and trade data only; no news feed is connected, and the screen says so.
+- **BUY NOW.** Meme-coin scalps that cleared every gate, in plain words: buy up to, sell at, get out at, max CAD, done within N minutes. Flashes green and beeps (turn sound on once; the browser needs a click).
+- **WATCH.** Good pattern, failed the cost gate or a daily limit. Says why in one sentence.
+- **LONG / SHORT.** Hourly Donchian breakouts on BTC, ETH, SOL, XRP, DOGE, ADA, AVAX, LINK from Coinbase public candles. Go long/short between A and B, take profit at, get out at, size for CAD 2.50 of risk. Hold hours to a day.
+- **SWING.** The same rule on daily candles. Hold days to weeks. Rare.
+- Tags on every card: FRESH, REWARD x× RISK, TRIP COSTS n%, N MIN MAX, VOLUME x×, STOP n%. `--no-majors` turns the big-coin desk off.
 - **Scorecard.** Every valid setup gets its USD price stamped when it appears and again at 1, 5, 30 minutes and 4 hours. "Beat cost" is the share whose move exceeded the signal's own round-trip estimate. Until that number is high over hundreds of signals, nothing here is an edge.
 
 ## Drill mode: a forced paper trade every 5 minutes

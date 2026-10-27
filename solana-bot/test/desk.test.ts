@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FakeClock } from "../src/core/clock.ts";
 import { silentLogger } from "../src/core/log.ts";
 import { deskState } from "../src/dashboard/desk.ts";
-import { atr, evaluateMajor, parseCandles, type Candle } from "../src/majors/majors.ts";
+import { atr, evaluateMajor, marketMood, parseCandles, type Candle } from "../src/majors/majors.ts";
 import { HORIZONS, OutcomeTracker } from "../src/signals/outcomes.ts";
 import { openDb } from "../src/storage/db.ts";
 import { PUMP_MINT } from "./helpers.ts";
@@ -85,5 +85,21 @@ describe("majors desk", () => {
     expect(t.side).toBe("NONE");
     expect(t.reasons[0]).toMatch(/volume only/);
     expect(evaluateMajor("X", mk(10, () => ({})), T, 1.4, 2.5)).toBeNull();
+    const swing = evaluateMajor("BTC-USD", long, T, 1.4, 2.5, undefined, "DAILY")!;
+    expect(swing.timeframe).toBe("DAILY");
+    expect(swing.reasons[0]).toMatch(/20d high/);
+  });
+
+  it("reads the market mood from 24 h moves across the big coins", () => {
+    const up = mk(30, (i) => ({ close: 100 + i }));
+    const down = mk(30, (i) => ({ close: 130 - i }));
+    const m = new Map<string, Candle[]>([["BTC-USD", up], ["ETH-USD", up], ["SOL-USD", up], ["XRP-USD", up], ["DOGE-USD", down]]);
+    const mood = marketMood(m);
+    expect(mood.mood).toBe("RISK ON");
+    expect(mood.upCount).toBe(4);
+    expect(mood.moves.find((x) => x.product === "BTC-USD")!.ret24h).toBeCloseTo(24 / 105, 6);
+    m.set("BTC-USD", down); m.set("ETH-USD", down); m.set("SOL-USD", down);
+    expect(marketMood(m).mood).toBe("RISK OFF");
+    expect(marketMood(new Map([["BTC-USD", up]])).mood).toBe("UNKNOWN");
   });
 });

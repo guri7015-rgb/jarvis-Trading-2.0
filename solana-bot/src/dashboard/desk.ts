@@ -80,5 +80,8 @@ export function deskState(d: DeskDeps) {
     scorecard: d.outcomes?.scorecard(now - 7 * 86_400_000) ?? [],
     scoringStats: d.outcomes?.stats ?? null,
     majors: d.majors?.snapshot() ?? null,
+    /** How busy the meme-coin market is right now, from the firehose. */
+    memeActivity: movers ? { txSeen: movers.stats.messages ?? 0, failedTx: movers.stats.failedTxs ?? 0, coinsTracked: movers.stats.keys ?? 0, moversNow: movers.list.length } : null,
+    noNews: "Price and trade data only. No news feed is connected.",
   };
 }
