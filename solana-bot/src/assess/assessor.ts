@@ -106,10 +106,12 @@ export class Assessor {
    */
   /** Fast lane: a mover from the scanner is assessed before the rotation, once it is confirmed on-chain. */
   private fast: string[] = [];
-  addFast(mint: string, source: string): void {
+  /** `front`: a watched coin whose check is going stale goes ahead of scanner movers; the queue never drops it. */
+  addFast(mint: string, source: string, front = false): void {
     if (this.fast.includes(mint)) return;
-    this.fast.push(mint);
-    if (this.fast.length > 20) this.fast.shift();
+    if (front) this.fast.unshift(mint);
+    else if (this.fast.length < 20) this.fast.push(mint);
+    else return; // full of movers already; a new mover can wait for the next tick
     if (!this.candidates.has(mint)) this.candidates.set(mint, { mint, source, addedAt: this.d.clock.now() });
   }
 

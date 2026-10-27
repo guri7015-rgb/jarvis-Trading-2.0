@@ -219,7 +219,7 @@ if (args.includes("--signals")) {
     quality: explore ? EXPLORE_QUALITY : undefined,
     maxWatch: explore ? MAX_WATCH_EXPLORE : undefined,
     hot: scanner ? () => new Set(moversNow.map((m) => m.mint).filter((m): m is string => !!m)) : undefined,
-    reassess: assessor ? (mint) => assessor.addFast(mint, "watchlist") : undefined,
+    reassess: assessor ? (mint) => assessor.addFast(mint, "watchlist", true) : undefined,
     backfill: scanner ? (key) => scanner!.recent(key) : undefined,
     drillEveryMs: drill ? drillEveryMs : undefined,
     drillHoldMs: drill ? drillHoldMs : undefined,
