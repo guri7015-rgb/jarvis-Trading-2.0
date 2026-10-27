@@ -37,7 +37,7 @@ export const DEFAULT_PARAMS: StrategyParams = { A: { ...A_PARAMS }, B: { ...B_PA
 export const EXPLORE_PARAMS: StrategyParams = {
   A: { ...A_PARAMS, minImpulsePct: 0.05, maxConsolidationRangePct: 0.1, minBuyers60: 5, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, maxExtensionPct: 0.05, targetImpulseFraction: 0.8 },
   B: { ...B_PARAMS, minRangeTrades: 10, minBreakoutPct: 0.01, minRateAccel: 1.5, minBuyers60: 5, maxTopBuyerShare: 0.4, targetRangeFraction: 0.8 },
-  C: { ...C_PARAMS, minTrades30: 6, minRateAccel: 1.5, minNewBuyers30: 4, minImbalance60: 0.2, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, minRet60: 0.02, targetPct: 0.15 },
+  C: { ...C_PARAMS, maxTokenAgeMs: 15 * 60_000, minTrades30: 6, minRateAccel: 1.5, minNewBuyers30: 4, minImbalance60: 0.2, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, minRet60: 0.02, targetPct: 0.15 },
   D: { ...D_PARAMS },
   E: { ...E_PARAMS, minRunPct: 0.1, minBuyers10: 2, minNewBuyers30: 3, minImbalance60: 0, maxTopBuyerShare: 0.45, maxRepeatedSizeRatio: 0.7, targetFractionToHigh: 0.8 },
 };

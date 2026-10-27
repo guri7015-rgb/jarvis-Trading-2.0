@@ -63,6 +63,8 @@ export interface EngineDeps {
   quality?: QualityRules;
   /** Watchlist size; defaults to MAX_WATCH. */
   maxWatch?: number;
+  /** A coin younger than this gets reserved watch slots (the early-buyers pattern needs young coins). 0 = off. */
+  youngMs?: number;
   /** Ask the assessor to re-check a watched coin now (its PASS goes stale for entries after maxAssessmentAgeMs). */
   reassess?: (mint: string) => void;
   /** Scanner movers (mints) that should be watched ahead of everything else. */
@@ -183,22 +185,43 @@ export class SignalEngine {
       }
     }
     const maxWatch = this.d.maxWatch ?? MAX_WATCH;
-    if (this.watch.size >= maxWatch) return;
-    // Newest assessment per token in the lookback, cheapest round trip first. The cost
-    // bar is the whole game: a 0.5% trip needs a far smaller move to pay than a 4% one.
+    // Young coins (for the early-buyers pattern) get reserved slots and can bump the oldest idle coin.
+    const youngMs = this.d.youngMs ?? 0;
+    const youngSlots = youngMs ? Math.min(2, Math.max(0, maxWatch - 1)) : 0;
+    const ageOf = (mint: string) => {
+      const t = this.d.registry.get(mint);
+      return t?.created_at ? now - t.created_at : Infinity;
+    };
+    const isYoung = (mint: string) => ageOf(mint) <= youngMs;
+    const youngWatched = () => [...this.watch.keys()].filter(isYoung).length;
+    // Newest assessment per token in the lookback. Young coins first (the early pattern needs them),
+    // then scanner movers, then the cheapest round trip: a 0.5% trip needs a far smaller move to pay than a 4% one.
     const rows = this.d.db
       .prepare("SELECT mint, verdict, rejects, total_cost_bps FROM assessments WHERE at >= ? ORDER BY at DESC")
       .all(now - ASSESSMENT_LOOKBACK_MS) as { mint: string; verdict: string; rejects: string; total_cost_bps: number | null }[];
     const seen = new Set<string>();
     const latest = rows.filter((r) => (seen.has(r.mint) ? false : (seen.add(r.mint), true)));
     const hot = this.d.hot?.() ?? new Set<string>();
-    latest.sort((a, b) => Number(hot.has(b.mint)) - Number(hot.has(a.mint)) || (a.total_cost_bps ?? 1e9) - (b.total_cost_bps ?? 1e9));
+    latest.sort((a, b) => Number(isYoung(b.mint)) - Number(isYoung(a.mint)) || Number(hot.has(b.mint)) - Number(hot.has(a.mint)) || (a.total_cost_bps ?? 1e9) - (b.total_cost_bps ?? 1e9));
     for (const r of latest) {
-      if (this.watch.size >= maxWatch) break;
       if (this.watch.has(r.mint)) continue;
       const rejects = JSON.parse(r.rejects) as { kind: string }[];
       const researchOnly = r.verdict === "REJECT" && rejects.length > 0 && rejects.every((x) => x.kind === "data");
       if (r.verdict !== "PASS" && !(this.d.research && researchOnly) && !this.d.drillUnsafe) continue;
+      const young = isYoung(r.mint);
+      if (this.watch.size >= maxWatch) {
+        if (!young || youngWatched() >= youngSlots) continue;
+        // Full, and a young coin is waiting: bump the oldest-added non-young coin with no open position and no recent signal.
+        const held = new Set(this.ledgerOpen().map((p) => p.mint));
+        const victim = [...this.watch.entries()].filter(([m]) => !isYoung(m) && !held.has(m)).sort((a, b) => a[1].addedAt - b[1].addedAt)[0];
+        if (!victim) continue;
+        this.d.stream.remove(victim[1].target.account);
+        this.watch.delete(victim[0]);
+        this.stats.watchDrops++;
+        this.d.logger.info("watch slot given to a young coin", { dropped: victim[0], young: r.mint });
+      } else if (!young && this.watch.size >= maxWatch - youngSlots + youngWatched()) {
+        continue; // keep the reserved slots free for young coins
+      }
       const target = await this.resolveTarget(r.mint);
       if (!target) continue;
       const t = this.d.registry.get(r.mint);

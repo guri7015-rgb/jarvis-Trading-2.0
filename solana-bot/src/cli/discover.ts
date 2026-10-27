@@ -220,6 +220,7 @@ if (args.includes("--signals")) {
     params: strategyParams.params,
     quality: explore ? EXPLORE_QUALITY : undefined,
     maxWatch: explore ? MAX_WATCH_EXPLORE : undefined,
+    youngMs: scan ? strategyParams.params.C.maxTokenAgeMs : undefined,
     hot: scanner ? () => new Set(moversNow.map((m) => m.mint).filter((m): m is string => !!m)) : undefined,
     reassess: assessor ? (mint) => assessor.addFast(mint, "watchlist", true) : undefined,
     backfill: scanner ? (key) => scanner!.recent(key) : undefined,
