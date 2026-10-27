@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FakeClock } from "../src/core/clock.ts";
 import { silentLogger } from "../src/core/log.ts";
 import { deskState } from "../src/dashboard/desk.ts";
-import { atr, evaluateMajor, marketMood, parseCandles, type Candle } from "../src/majors/majors.ts";
+import { atr, computeBias, evaluateMajor, evaluateRange, marketMood, parseCandles, toFourHour, type Candle } from "../src/majors/majors.ts";
 import { HORIZONS, OutcomeTracker } from "../src/signals/outcomes.ts";
 import { openDb } from "../src/storage/db.ts";
 import { PUMP_MINT } from "./helpers.ts";
@@ -88,6 +88,44 @@ describe("majors desk", () => {
     const swing = evaluateMajor("BTC-USD", long, T, 1.4, 2.5, undefined, "DAILY")!;
     expect(swing.timeframe).toBe("DAILY");
     expect(swing.reasons[0]).toMatch(/20d high/);
+  });
+
+  it("gives three targets at 1x, 2x, 3x the stop distance and tags the plan against the daily bias", () => {
+    const long = mk(40, (i) => (i === 39 ? { high: 104, close: 103, volume: 20 } : {}));
+    const p = evaluateMajor("BTC-USD", long, T, 1.4, 2.5, undefined, "HOURLY", { daily: "DOWN", h4: "FLAT", h1: "UP" })!;
+    const d = 103 - p.stop;
+    expect(p.targets.map((t) => (t - 103) / d)).toEqual([1, 2, 3]);
+    expect(p.target).toBe(p.targets[1]);
+    expect(p.withBias).toBe(false);
+    expect(evaluateMajor("BTC-USD", long, T, 1.4, 2.5, undefined, "HOURLY", { daily: "UP", h4: "UP", h1: "UP" })!.withBias).toBe(true);
+    expect(evaluateMajor("BTC-USD", long, T, 1.4, 2.5, undefined, "HOURLY", { daily: "FLAT", h4: "UP", h1: "UP" })!.withBias).toBeNull();
+  });
+
+  it("offers a range trade at the bottom or top fifth of a holding range, never in the middle", () => {
+    // Quiet bars around 100; the range extremes (90 and 110) were set 16-18 hours ago, outside the ATR window, so ATR stays small.
+    const base = mk(40, (i) => (i === 21 ? { low: 90, high: 101, close: 100 } : i === 23 ? { high: 110, low: 99, close: 100 } : {}));
+    const bottom = base.map((c, i) => (i === 39 ? { ...c, close: 92, low: 91, high: 94 } : c));
+    const r = evaluateRange("ETH-USD", bottom, T, 1.4, 2.5, null)!;
+    expect(r.kind).toBe("RANGE");
+    expect(r.side).toBe("LONG");
+    expect(r.stop).toBeLessThan(90);
+    expect(r.targets[0]).toBe(100);
+    expect(r.targets[1]).toBe(110);
+    const top = base.map((c, i) => (i === 39 ? { ...c, close: 108, low: 106, high: 109 } : c));
+    expect(evaluateRange("ETH-USD", top, T, 1.4, 2.5, null)!.side).toBe("SHORT");
+    expect(evaluateRange("ETH-USD", base, T, 1.4, 2.5, null)).toBeNull();
+  });
+
+  it("reads bias per timeframe and groups hourly candles into 4-hour ones", () => {
+    const rising = mk(60, (i) => ({ close: 100 + i, open: 99 + i, high: 101 + i, low: 98 + i }));
+    const falling = mk(60, (i) => ({ close: 160 - i, open: 161 - i, high: 162 - i, low: 159 - i }));
+    const flat = mk(60, () => ({}));
+    expect(computeBias(rising, falling)).toEqual({ daily: "DOWN", h4: "UP", h1: "UP" });
+    expect(computeBias(flat, flat)).toEqual({ daily: "FLAT", h4: "FLAT", h1: "FLAT" });
+    const fh = toFourHour(rising);
+    expect(fh).toHaveLength(15);
+    expect(fh[fh.length - 1]!.close).toBe(159);
+    expect(fh[fh.length - 1]!.open).toBe(155);
   });
 
   it("reads the market mood from 24 h moves across the big coins", () => {

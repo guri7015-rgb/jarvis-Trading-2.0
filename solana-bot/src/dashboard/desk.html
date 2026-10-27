@@ -87,7 +87,7 @@
   </div>
   <div class="col">
     <h2><span class="tag red">LONG / SHORT</span> Big coins, hours <span class="count" id="nLs">0</span></h2>
-    <p class="sub">Hourly breakouts on BTC, ETH, SOL and 5 more. Hold hours to a day. Needs an exchange account.</p>
+    <p class="sub">Hourly breakouts, or range trades when the range is holding. BTC, ETH, SOL and 5 more. Hold hours to a day. Needs an exchange account.</p>
     <div id="ls"></div>
   </div>
   <div class="col">
@@ -177,11 +177,11 @@ function majorCard(p, fresh) {
   return `<div class="card ${color} ${fresh ? "fresh" : ""}">
     <div class="head"><div class="t1">${esc(sym)} <span class="nm">USD ${px(p.price)}</span></div><div class="age">${p.ageH < 1 ? "this " + (p.timeframe === "DAILY" ? "day" : "hour") : p.ageH < 48 ? p.ageH.toFixed(0) + " h ago" : (p.ageH / 24).toFixed(0) + " d ago"}</div></div>
     <p class="say"><b>${long ? "Go long" : "Go short"}</b> between <b>${px(p.entryZoneLow)}</b> and <b>${px(p.entryZoneHigh)}</b>.<br>
-    <b>Take profit</b> at <b>${px(p.target)}</b> <span class="up">(${pct(p.targetPct)})</span>.<br>
-    <b>Get out</b> at <b>${px(p.stop)}</b> <span class="down">(${pct(-p.stopPct)})</span>, or if a candle closes back ${long ? "below" : "above"} <b>${px(p.level)}</b>.<br>
+    <b>Targets</b> ${(p.targets || [p.target]).map((t, i) => `<b>${px(t)}</b> <span class="up">(${pct((t / p.price - 1) * 100)})</span>${i < 2 ? ", " : ""}`).join("")}.<br>
+    <b>Get out</b> at <b>${px(p.stop)}</b> <span class="down">(${pct(-p.stopPct)})</span>${p.kind === "RANGE" ? "" : `, or if a candle closes back ${long ? "below" : "above"} <b>${px(p.level)}</b>`}.<br>
     Size for CAD ${p.sizeForRiskCad.riskCad} of risk: <b>${p.sizeForRiskCad.units.toPrecision(3)} ${esc(sym)}</b> (USD ${px(p.sizeForRiskCad.notionalUsd)}). ${hold}.</p>
-    <div class="tags"><span class="tag ${color}">${long ? "LONG" : "SHORT"}</span><span class="tag ${p.timeframe === "DAILY" ? "purple" : "blue"}">${p.timeframe === "DAILY" ? "SWING" : "HOURS"}</span><span class="tag ${p.volumeRatio >= 2 ? "go" : "grey"}">VOLUME ${p.volumeRatio.toFixed(1)}×</span><span class="tag grey">STOP ${p.stopPct.toFixed(1)}%</span></div>
-    <p class="note">${esc(p.reasons[0])}. ${long ? "" : "If you cannot short on your exchange, read this as: do not be long."}</p>
+    <div class="tags"><span class="tag ${color}">${long ? "LONG" : "SHORT"}</span><span class="tag ${p.kind === "RANGE" ? "grey" : "blue"}">${p.kind === "RANGE" ? "RANGE TRADE" : "BREAKOUT"}</span><span class="tag ${p.timeframe === "DAILY" ? "purple" : "blue"}">${p.timeframe === "DAILY" ? "SWING" : "HOURS"}</span>${p.withBias === true ? `<span class="tag go">WITH TREND</span>` : p.withBias === false ? `<span class="tag red">AGAINST TREND</span>` : `<span class="tag grey">FLAT MARKET</span>`}${p.kind === "RANGE" ? "" : `<span class="tag ${p.volumeRatio >= 2 ? "go" : "grey"}">VOLUME ${p.volumeRatio.toFixed(1)}×</span>`}<span class="tag grey">STOP ${p.stopPct.toFixed(1)}%</span></div>
+    <p class="note">${esc(p.reasons[0])}. Take a third off at each target; move the stop to break-even after the first. ${long ? "" : "If you cannot short on your exchange, read this as: do not be long."}</p>
   </div>`;
 }
 function moodTiles(s) {
@@ -190,7 +190,9 @@ function moodTiles(s) {
   const moodCls = mood === "RISK ON" ? "up" : mood === "RISK OFF" ? "down" : "";
   const mv = (p) => mk ? mk.moves.find((m) => m.product === p) : null;
   const tile = (k, v, sub, c = "") => `<div class="tile"><div class="k">${esc(k)}</div><div class="v ${c}">${v}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>`;
-  const coin = (p, name) => { const m = mv(p); return tile(name + " 24 h", m && m.ret24h !== null ? pct(m.ret24h * 100) : "–", m && m.price ? `USD ${px(m.price)} · 1 h ${pct(m.ret1h === null ? null : m.ret1h * 100)} · 4 h ${pct(m.ret4h === null ? null : m.ret4h * 100)}` : "loading", m ? cls(m.ret24h) : ""); };
+  const arrow = (d) => d === "UP" ? `<span class="up">▲</span>` : d === "DOWN" ? `<span class="down">▼</span>` : `<span style="color:var(--muted)">▬</span>`;
+  const biasRow = (b) => b ? `<span class="mono" title="daily / 4 h / 1 h lean">day ${arrow(b.daily)} 4h ${arrow(b.h4)} 1h ${arrow(b.h1)}</span>` : "";
+  const coin = (p, name) => { const m = mv(p); return `<div class="tile"><div class="k">${esc(name)} 24 h</div><div class="v ${m ? cls(m.ret24h) : ""}">${m && m.ret24h !== null ? pct(m.ret24h * 100) : "–"}</div><div class="s">${m && m.price ? `USD ${px(m.price)} · ` + biasRow(m.bias) : "loading"}</div></div>`; };
   const act = s.memeActivity;
   return `<div class="tile big"><div class="k">Market right now</div><div class="v ${moodCls}">${esc(mood)}</div><div class="s">${esc(mk ? mk.note : "Majors desk off")}</div></div>`
     + coin("BTC-USD", "BTC") + coin("ETH-USD", "ETH") + coin("SOL-USD", "SOL")
@@ -209,17 +211,18 @@ function render(s) {
   let newBuy = 0, newOther = 0;
   for (const x of s.signals) if (!seen.has(x.id)) { seen.add(x.id); if (!first) { if (x.kind === "ENTER" && x.strategy !== "DRILL") newBuy++; else newOther++; } }
   const plans = s.majors ? s.majors.plans.filter((p) => p.side !== "NONE") : [];
-  for (const p of plans) { const k = `${p.product}:${p.timeframe}:${p.at}`; if (!seen.has(k)) { seen.add(k); if (!first) newOther++; } }
+  for (const p of plans) { const k = `${p.product}:${p.timeframe}:${p.kind}:${p.at}`; if (!seen.has(k)) { seen.add(k); if (!first) newOther++; } }
   if (newBuy) beep("buy"); else if (newOther) beep("other");
   const fresh = (x) => !first && x.ageS < 90;
   $("nBuy").textContent = buy.length;
   $("buy").innerHTML = buy.length ? buy.map((x) => memeCard(x, fresh(x))).join("") : `<div class="empty">Nothing right now. Most patterns die on cost: see WATCH.</div>`;
   $("nWatch").textContent = watch.length;
   $("watch").innerHTML = watch.length ? watch.slice(0, 10).map((x) => memeCard(x, fresh(x))).join("") : `<div class="empty">No patterns in the last 3 hours.</div>`;
-  const ls = plans.filter((p) => p.timeframe === "HOURLY"), sw = plans.filter((p) => p.timeframe === "DAILY");
-  const quiet = s.majors ? s.majors.plans.filter((p) => p.side === "NONE" && p.timeframe === "HOURLY").map((p) => p.product.replace("-USD", "")) : [];
+  const ls = plans.filter((p) => p.timeframe === "HOURLY").sort((a, b) => (a.kind === "RANGE" ? 1 : 0) - (b.kind === "RANGE" ? 1 : 0)), sw = plans.filter((p) => p.timeframe === "DAILY");
+  const shown = new Set(ls.map((p) => p.product));
+  const quiet = s.majors ? s.majors.plans.filter((p) => p.side === "NONE" && p.timeframe === "HOURLY" && !shown.has(p.product)).map((p) => p.product.replace("-USD", "")) : [];
   $("nLs").textContent = ls.length;
-  $("ls").innerHTML = ls.length ? ls.map((p) => majorCard(p, !first && p.ageH < 0.1)).join("") : `<div class="empty">${s.majors ? "No breakout this hour. " + (quiet.length ? "Inside their range: " + quiet.join(", ") + "." : "") : "Majors desk off or loading."}</div>`;
+  $("ls").innerHTML = ls.length ? ls.map((p) => majorCard(p, !first && p.ageH < 0.1)).join("") : `<div class="empty">${s.majors ? "No breakout and nothing at the edge of a range this hour. " + (quiet.length ? "Mid-range: " + quiet.join(", ") + "." : "") : "Majors desk off or loading."}</div>`;
   $("nSwing").textContent = sw.length;
   $("swing").innerHTML = sw.length ? sw.map((p) => majorCard(p, false)).join("") : `<div class="empty">No daily breakout. Swing plans are rare: a few a month per coin.</div>`;
   const L = s.movers ? s.movers.list : [];
