@@ -69,11 +69,11 @@
 <div class="cols">
   <div class="col"><h2>1 · LAUNCHED <span class="count" id="n1">0</span></h2><p class="sub">Born in the last 3 minutes. Newest on top.</p><div id="c1"></div></div>
   <div class="col"><h2>2 · QUICK TEST PASSED <span class="count" id="n2">0</span></h2><p class="sub">Can be sold back, no mint or freeze switch, real SOL in it, trip cost known. Holder check still running.</p><div id="c2"></div></div>
-  <div class="col"><h2>3 · <span class="tag go">BUY EARLY</span> <span class="count" id="n3">0</span></h2><p class="sub">Brand new, buyers piling in, not run away yet. Pattern C.</p><div id="c3"></div></div>
+  <div class="col"><h2>3 · <span class="tag go">BUY</span> <span class="count" id="n3">0</span></h2><p class="sub">EARLY: brand new, buyers piling in (C). MOMENTUM: rested and going again (A), or broke its high (B). Green = cleared every gate. Amber = pattern there, not a buy.</p><div id="c3"></div></div>
   <div class="col"><h2>4 · <span class="tag purple">DIP HUNT</span> <span class="count" id="n4">0</span></h2><p class="sub">Missed the first move? It ran, pulled back, selling dried up, buyers are back. Pattern E.</p><div id="c4"></div></div>
   <div class="col"><h2>5 · <span class="tag red">SELL</span> <span class="count" id="n5">0</span></h2><p class="sub">Dump, broad selling, failed breakout or liquidity leaving. Get out whether or not you hold it.</p><div id="c5"></div></div>
 </div>
-<p class="why" style="margin-top:10px">Other patterns (A, B) show on the <a href="/desk">desk</a>. Everything here is price and trade data from the chain; "buyers back" means distinct wallets, not people talking. No news feed is connected.</p>
+<p class="why" style="margin-top:10px">Everything here is price and trade data from the chain; "buyers back" means distinct wallets, not people talking. No news feed is connected.</p>
 </div>
 
 <script>
@@ -116,10 +116,11 @@ function zone(s) {
   else st = `<span class="tag amber">GONE, ABOVE ENTRY</span>`;
   return `${st}<span>now <b>${px(l.price)}</b></span><span class="${cls(moved)}">${pct(moved)} since signal</span>`;
 }
+const kindTag = (s) => s.strategy === "C_early_acceleration" ? `<span class="tag go">EARLY</span>` : s.strategy === "E_dip_hunt" ? `<span class="tag purple">DIP</span>` : `<span class="tag blue">MOMENTUM</span>`;
 function sigCard(s, color, fresh) {
   const blocked = s.kind !== "ENTER";
   return `<div class="card ${blocked ? "amber" : color} ${fresh ? "fresh" : ""}">
-    <div class="head">${tok(s.mint)}<div class="age">${ago(s.ageS)} ago</div></div>
+    <div class="head">${tok(s.mint)}<div class="age">${kindTag(s)} ${ago(s.ageS)} ago</div></div>
     ${blocked ? `<p class="say">Pattern is there. <b>Not a buy</b>: ${esc(whyNot(s))}</p>` : `<p class="say"><b>Buy</b> up to <b>${px(s.maxEntryPrice)}</b>. <b>Sell</b> at <b>${px(s.target)}</b> <span class="up">(${pct(s.targetPct)})</span>. <b>Out</b> at <b>${px(s.stop)}</b> <span class="down">(${pct(s.stopPct === null ? null : -s.stopPct)})</span>.<br>Max <b>CAD ${s.sizeCad ? s.sizeCad.toFixed(0) : "–"}</b>, risk <b>CAD ${s.plannedLossCad ? s.plannedLossCad.toFixed(2) : "–"}</b>. ${s.timeStopS ? Math.round(s.timeStopS / 60) + " min max." : ""}</p>`}
     <div class="live">${zone(s)}</div>
     <div class="why">${esc((s.why || []).join(" · "))}</div>
@@ -151,8 +152,9 @@ function render(s) {
   $("c1").innerHTML = b.launched.length ? b.launched.map((t) => `<div class="card"><div class="head">${tok(t.mint)}<div class="age">${ago(t.ageS)}</div></div><div class="tags"><span class="tag ${t.confirmed ? "go" : "grey"}">${t.confirmed ? "ON CHAIN" : "CHECKING"}</span><span class="tag grey">${esc(t.venue === "pump_curve" ? "pump.fun" : t.venue || "?")}</span>${t.buyers60 !== null ? `<span class="tag ${t.buyers60 >= 8 ? "go" : "grey"}">${t.buyers60} BUYERS / MIN</span>` : ""}</div></div>`).join("") : `<div class="empty">No launches in the last 3 minutes.</div>`;
   $("n2").textContent = b.quickPassed.length;
   $("c2").innerHTML = b.quickPassed.length ? b.quickPassed.map((t) => `<div class="card ${t.full ? "go" : ""}"><div class="head">${tok(t.mint)}<div class="age">${ago(t.ageS)}</div></div><div class="tags"><span class="tag ${t.full ? "go" : "amber"}">${t.full ? "FULL CHECK PASSED" : "QUICK TEST PASSED"}</span>${t.costBps !== null ? `<span class="tag ${t.costBps <= 200 ? "go" : t.costBps <= 300 ? "amber" : "red"}">TRIP ${(t.costBps / 100).toFixed(1)}%</span>` : ""}${t.buyers60 !== null ? `<span class="tag grey">${t.buyers60} BUYERS / MIN</span>` : ""}</div>${t.full ? "" : `<div class="why">waiting on: ${esc(t.waitingOn.join(", ").replace(/_/g, " ").toLowerCase())}</div>`}</div>`).join("") : `<div class="empty">Nothing clean in the last 15 minutes.</div>`;
-  $("n3").textContent = b.buyEarly.length;
-  $("c3").innerHTML = b.buyEarly.length ? b.buyEarly.map((x) => sigCard(x, "go", fresh(x))).join("") : `<div class="empty">No early-buyers pattern in the last 10 minutes.</div>`;
+  const buyCol = [...b.buyEarly, ...b.other].sort((x, y) => (x.kind === "ENTER" ? 0 : 1) - (y.kind === "ENTER" ? 0 : 1) || x.ageS - y.ageS);
+  $("n3").textContent = buyCol.length;
+  $("c3").innerHTML = buyCol.length ? buyCol.slice(0, 12).map((x) => sigCard(x, "go", fresh(x))).join("") : `<div class="empty">No buy pattern in the last 10 minutes.</div>`;
   $("n4").textContent = b.dipHunt.length;
   $("c4").innerHTML = b.dipHunt.length ? b.dipHunt.map((x) => sigCard(x, "purple", fresh(x))).join("") : `<div class="empty">No dip with buyers coming back in the last 10 minutes.</div>`;
   $("n5").textContent = b.sell.length;
