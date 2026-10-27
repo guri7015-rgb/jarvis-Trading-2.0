@@ -66,6 +66,12 @@ export interface EngineDeps {
   drillEveryMs?: number;
   /** Drill: time stop for each forced position. Default 10 minutes. */
   drillHoldMs?: number;
+  /**
+   * Drill, safety gate bypassed (paper only, owner's written request): any assessed coin joins
+   * the watchlist and any watched coin with a recent price can be entered, whatever its gate verdict.
+   * Costs are assumed at 4% when unmeasured. Expect failed sells and stuck positions.
+   */
+  drillUnsafe?: boolean;
 }
 
 interface Watched {
@@ -184,7 +190,7 @@ export class SignalEngine {
       if (this.watch.has(r.mint)) continue;
       const rejects = JSON.parse(r.rejects) as { kind: string }[];
       const researchOnly = r.verdict === "REJECT" && rejects.length > 0 && rejects.every((x) => x.kind === "data");
-      if (r.verdict !== "PASS" && !(this.d.research && researchOnly)) continue;
+      if (r.verdict !== "PASS" && !(this.d.research && researchOnly) && !this.d.drillUnsafe) continue;
       const target = await this.resolveTarget(r.mint);
       if (!target) continue;
       const t = this.d.registry.get(r.mint);
@@ -353,6 +359,12 @@ export class SignalEngine {
     const candidates = [...this.watch.keys()]
       .filter((mint) => !held.has(mint))
       .map((mint) => ({ mint, a: this.assessment(mint), f: computeFeatures(mint, this.loadTrades(mint, now - 300_000), now, this.gaps(now - 300_000), DRILL_QUALITY) }))
+      .map((c) => {
+        if (!this.d.drillUnsafe || !c.f?.last) return c;
+        // Unsafe drill: stand in for a fresh PASS. Measured costs if any, else 4%.
+        const a: AssessmentView = { at: now, verdict: "PASS", researchOnly: false, totalCostBps: c.a?.totalCostBps ?? 400, breakEvenPct: c.a?.breakEvenPct ?? 4, sizeCad: c.a?.sizeCad ?? 30, solCad: c.a?.solCad ?? null };
+        return { ...c, a };
+      })
       .filter((c) => c.a && c.a.verdict === "PASS" && now - c.a.at <= this.d.limits.maxAssessmentAgeMs && c.a.totalCostBps !== null && c.f?.last)
       .sort((x, y) => x.a!.totalCostBps! - y.a!.totalCostBps!);
     const c = candidates[0];
@@ -373,7 +385,7 @@ export class SignalEngine {
     const signal: Signal = {
       strategy: "DRILL",
       action: "ENTER",
-      reasons: ["drill: forced entry, no setup"],
+      reasons: [this.d.drillUnsafe ? "drill: forced entry, no setup, SAFETY GATE BYPASSED" : "drill: forced entry, no setup"],
       refPrice: last,
       maxEntryPrice: last * 1.03,
       invalidationPrice: last * 0.95,

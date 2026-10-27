@@ -105,7 +105,7 @@ export function dashboardState(d: DashboardDeps) {
   const staleQuotes = one<{ n: number }>("SELECT COUNT(*) n FROM assessments WHERE at >= ? AND (rejects LIKE '%QUOTE_STALE%' OR rejects LIKE '%QUOTE_GAP%')", now - 3_600_000)?.n ?? 0;
 
   // Performance of this mode's resolved positions, and how simulated fills compared with their quotes.
-  const mode = d.ledger ? (d.mode ?? "PAPER").toLowerCase().replace(" ", "_") : "paper";
+  const mode = d.ledger ? (d.mode ?? "PAPER").toLowerCase().replace(" unsafe", "").replace(" ", "_") : "paper";
   const perf = one<{ n: number; wins: number; losses: number; avg_win: number | null; avg_loss: number | null; avg_hold_s: number | null; pnl: number | null; failed: number }>(
     `SELECT COUNT(*) n, SUM(realized_pnl_cad > 0) wins, SUM(realized_pnl_cad < 0) losses,
             AVG(CASE WHEN realized_pnl_cad > 0 THEN realized_pnl_cad END) avg_win,

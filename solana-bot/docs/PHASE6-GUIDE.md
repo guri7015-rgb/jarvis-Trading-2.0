@@ -47,6 +47,8 @@ caffeinate -i npm run discover -- --assess --signals --paper --drill --dashboard
 
 For a short burst, `--drill-every 30 --drill-hold 60` tries an entry every 30 seconds and holds each for at most a minute; add `--minutes 10` to stop by itself. `--drill-max-open 6` lets the drill hold up to six positions at once (paper only, owner's written request; the per-trade size and loss caps still apply to each).
 
+`--drill-unsafe` bypasses the token safety gate for drill entries: any assessed coin joins the watchlist and can be entered. Costs are assumed at 4% where unmeasured. Expect failed sells and stuck positions; that is the point of seeing it on paper.
+
 Same position size (CAD 35 max) and planned loss per trade (CAD 2.50). The entry count is unlimited and the paper daily loss cap is CAD 25, so a session lasts long enough to produce data. Expect it to lose steadily: every entry pays the round trip with no edge behind it. Positions are stored under mode `paper_drill` and never count toward anything.
 
 ## What has to be true before Phase 7
