@@ -13,8 +13,9 @@ It is separate from the forex/crypto app in the parent folder and shares no code
 | 3. Safety gate, liquidity, quotes, cost measurement | Done: [docs/PHASE3-REPORT.md](docs/PHASE3-REPORT.md). Holder checks need your Helius key. |
 | 4. Strategies A–D, risk manager, exit engine | Done: [docs/PHASE4-REPORT.md](docs/PHASE4-REPORT.md), [docs/STRATEGIES.md](docs/STRATEGIES.md). Zero signals on real tapes with placeholder thresholds. |
 | 5. Paper simulator, accounting, backtest, dashboard, tax export | Done: [docs/PHASE5-REPORT.md](docs/PHASE5-REPORT.md). No strategy has cleared the cost bar yet. |
-| 6. Forward paper trading and calibration | Tooling done: [docs/PHASE6-GUIDE.md](docs/PHASE6-GUIDE.md). Needs days of tape before any decision. |
-| 7–9 | Not started. Live trading needs your explicit written approval. |
+| 6. Forward paper trading and calibration | Running: [docs/PHASE6-GUIDE.md](docs/PHASE6-GUIDE.md). Explore and drill modes measure execution. Needs days of tape before any decision. |
+| 7. Security and operations review | Done: [docs/PHASE7-REPORT.md](docs/PHASE7-REPORT.md). Two high findings fixed; remaining items listed. |
+| 8–9 | Not started. Live trading needs your explicit written approval. |
 
 ## Quick start
 

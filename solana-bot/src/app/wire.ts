@@ -34,7 +34,8 @@ export function buildDeps(cfg: AppConfig): ServiceDeps {
   const disp = dispatcher();
 
   const fetchImpl: FetchLike = async (url, init) => {
-    const res = await undiciFetch(url, { ...init, ...(disp ? { dispatcher: disp } : {}) });
+    // Never follow redirects: a keyed request must not carry its x-api-key to another host.
+    const res = await undiciFetch(url, { ...init, redirect: "error", ...(disp ? { dispatcher: disp } : {}) });
     return res;
   };
   const wsFactory: WsFactory = (url) => new WebSocket(url, disp ? { dispatcher: disp } : undefined) as unknown as WsLike;

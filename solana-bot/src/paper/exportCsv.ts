@@ -8,7 +8,10 @@
 import type { DatabaseSync } from "node:sqlite";
 
 const esc = (v: unknown) => {
-  const s = v === null || v === undefined ? "" : String(v);
+  let s = v === null || v === undefined ? "" : String(v);
+  // A cell starting with = + - @ would run as a formula in a spreadsheet. Route labels and
+  // failure strings come from providers, so neutralise them (negative numbers stay numbers).
+  if (/^[=+\-@]/.test(s) && !/^-?\d/.test(s)) s = `'${s}`;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

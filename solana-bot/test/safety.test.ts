@@ -25,13 +25,16 @@ describe("no execution capability", () => {
       /sendTransaction/,
       /sendRawTransaction/,
       /signTransaction/,
-      /Keypair/,
-      /createKeyPairSignerFromBytes|generateKeyPairSigner/,
+      /Keypair/i,
+      /createKeyPairSignerFromBytes|generateKeyPairSigner|createKeyPairFromBytes|createSignerFromKeyPair|generateKeyPair/,
+      /sendAndConfirm/,
       /secretKey/i,
       /privateKey/i,
       /seed\s*phrase|mnemonic/i,
       /trade-local|api\/trade/,
       /swap\/v\d\/(order|execute|build|swap)/,
+      /ultra\/v\d|\/execute\b|createOrder|trigger\/v\d|recurring\/v\d/,
+      /(?<!as(?: unknown as)? )\bimport\(/, // dynamic import; a type-position import(...) is fine
     ];
     const hits: string[] = [];
     for (const f of files(SRC)) {
@@ -39,6 +42,16 @@ describe("no execution capability", () => {
       for (const re of forbidden) if (re.test(text)) hits.push(`${f.replace(SRC, "src")}: ${re}`);
     }
     expect(hits).toEqual([]);
+  });
+
+  it("the RPC client only ever calls read-only methods", () => {
+    const text = readFileSync(resolve(SRC, "solana/rpc.ts"), "utf8");
+    const calls = [...text.matchAll(/this\.call\(\s*("?)([A-Za-z]+)/g)];
+    expect(calls.length).toBeGreaterThan(0);
+    for (const c of calls) {
+      expect(c[1]).toBe('"'); // method names are literals, never variables
+      expect(c[2]).toMatch(/^get[A-Z]/);
+    }
   });
 
   it(".env is git-ignored", () => {

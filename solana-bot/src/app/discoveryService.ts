@@ -9,7 +9,7 @@ import type { AppConfig } from "../core/config.ts";
 import type { Logger } from "../core/log.ts";
 import type { DiscoveryEvent, ProviderId } from "../core/types.ts";
 import { OnChainConfirmer } from "../discovery/confirmer.ts";
-import { categorize, TokenRegistry } from "../discovery/registry.ts";
+import { categorize, TokenRegistry, type TokenRow } from "../discovery/registry.ts";
 import { HealthMonitor } from "../health/monitor.ts";
 import type { HttpClient } from "../net/http.ts";
 import { ReconnectingWs, type WsFactory } from "../net/wsClient.ts";
@@ -221,7 +221,7 @@ export class DiscoveryService {
     const now = this.d.clock.now();
     const recent = this.d.db
       .prepare("SELECT * FROM tokens ORDER BY first_observed_at DESC LIMIT 8")
-      .all() as unknown as import("../discovery/registry.ts").TokenRow[];
+      .all() as unknown as TokenRow[];
     return {
       now,
       gate: this.d.health.gate(),

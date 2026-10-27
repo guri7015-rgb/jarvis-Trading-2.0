@@ -19,7 +19,7 @@ const PATTERNS: RegExp[] = [
   /([?&](?:api[-_]?key|apikey|key|token|access[-_]?token)=)[^&\s"']+/gi,
   // Header-style credentials
   /((?:x-api-key|authorization)["']?\s*[:=]\s*["']?)(?:Bearer\s+)?[^\s"',}]+/gi,
-  // 64-byte keypair arrays as JSON (a Solana secret key file)
+  // 64-byte signing-key arrays as JSON (the file format a wallet exports)
   /\[\s*(?:\d{1,3}\s*,\s*){63}\d{1,3}\s*\]/g,
   // Long base58 strings of secret-key length (87-88 chars). Addresses (32-44) and signatures (86-88) overlap
   // in length, so this only fires on 87-88 char strings that are labelled as secret/private.
