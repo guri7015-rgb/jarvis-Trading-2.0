@@ -175,7 +175,7 @@ if (args.includes("--signals")) {
     const ledger = new Ledger(deps.db, () => deps.clock.now(), paperMode);
     const recovered = ledger.recover();
     if (recovered.failedUnresolved.length || recovered.reopened.length) deps.logger.warn("paper ledger recovered after an unclean stop", recovered);
-    const riskState = new RiskStateStore(deps.db, () => deps.clock.now());
+    const riskState = new RiskStateStore(deps.db, () => deps.clock.now(), paperMode);
     // Live priority-fee estimate (median of recent non-zero fees, capped), refreshed every 30 s.
     // Until the first sample arrives, budget for the cap rather than for zero.
     let prioEstimate = DEFAULT_POLICY.maxPriorityMicroLamports;
@@ -216,6 +216,7 @@ if (args.includes("--signals")) {
     quality: explore ? EXPLORE_QUALITY : undefined,
     maxWatch: explore ? MAX_WATCH_EXPLORE : undefined,
     hot: scanner ? () => new Set(moversNow.map((m) => m.mint).filter((m): m is string => !!m)) : undefined,
+    reassess: assessor ? (mint) => assessor.addFast(mint, "watchlist") : undefined,
     backfill: scanner ? (key) => scanner!.recent(key) : undefined,
     drillEveryMs: drill ? drillEveryMs : undefined,
     drillHoldMs: drill ? drillHoldMs : undefined,
@@ -232,7 +233,7 @@ if (args.includes("--signals")) {
     logger: deps.logger,
     limits: lim.limits,
     limitsRefused: lim.refused,
-    riskState: new RiskStateStore(deps.db, () => deps.clock.now()),
+    riskState: new RiskStateStore(deps.db, () => deps.clock.now(), paperMode),
     research: args.includes("--research"),
     newLaunchMaxAgeMs: cfg.discovery.newLaunchMaxAgeMs,
     earlyMaxAgeMs: cfg.discovery.earlyMaxAgeMs,
@@ -284,7 +285,7 @@ if (args.includes("--dashboard")) {
   const dashDeps = {
     db: deps.db,
     health: deps.health,
-    riskState: new RiskStateStore(deps.db, () => deps.clock.now()),
+    riskState: new RiskStateStore(deps.db, () => deps.clock.now(), paperMode),
     limits: riskLimits.limits,
     limitsRefused: riskLimits.refused,
     ledger: paperLedger,

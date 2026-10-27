@@ -128,8 +128,12 @@ export class Assessor {
         this.candidates.delete(mint);
         continue;
       }
-      const last = this.d.db.prepare("SELECT recheck_after FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1").get(mint) as { recheck_after: number } | undefined;
-      if (last && last.recheck_after > now) continue;
+      // A fast-lane re-check may run once the last check is 60 s old, whatever its own recheck delay says.
+      const last = this.d.db.prepare("SELECT at FROM assessments WHERE mint = ? ORDER BY at DESC LIMIT 1").get(mint) as { at: number } | undefined;
+      if (last && now - last.at < 60_000) {
+        this.fast.push(mint); // too soon: keep it queued
+        continue;
+      }
       return c;
     }
     const band = (c: Candidate) => liquidityBand(c.liquidityUsd);

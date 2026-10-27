@@ -62,6 +62,8 @@ export interface EngineDeps {
   quality?: QualityRules;
   /** Watchlist size; defaults to MAX_WATCH. */
   maxWatch?: number;
+  /** Ask the assessor to re-check a watched coin now (its PASS goes stale for entries after maxAssessmentAgeMs). */
+  reassess?: (mint: string) => void;
   /** Scanner movers (mints) that should be watched ahead of everything else. */
   hot?: () => Set<string>;
   /** Recent ticks the scanner already holds for a key, so a new watch starts with history instead of waiting 3 minutes. */
@@ -450,6 +452,9 @@ export class SignalEngine {
       featuresByMint.set(mint, f);
       if (!w) continue;
       const t = this.d.registry.get(mint);
+      // Keep the safety check fresh for every watched coin: re-check once it is half-way to stale.
+      const a0 = this.assessment(mint);
+      if (this.d.reassess && (!a0 || now - a0.at > this.d.limits.maxAssessmentAgeMs / 2)) this.d.reassess(mint);
       const cat = t ? categorize(t, now, { newLaunchMaxAgeMs: this.d.newLaunchMaxAgeMs, earlyMaxAgeMs: this.d.earlyMaxAgeMs }) : undefined;
       // Age only from a creation time that isn't merely an upper bound.
       const ctx = { tokenAgeMs: cat && cat.category !== "UNKNOWN_AGE" ? cat.ageMs : undefined };

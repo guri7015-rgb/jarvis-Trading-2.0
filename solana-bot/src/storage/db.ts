@@ -317,6 +317,24 @@ const MIGRATIONS: string[] = [
     updated_at INTEGER NOT NULL
   );
   `,
+  // 9: daily risk state per ledger mode, so a drill's entries and losses never count against
+  // paper or explore mode. Existing rows belong to 'paper'.
+  `
+  CREATE TABLE risk_state_v2 (
+    day TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    realized_loss_cad REAL NOT NULL DEFAULT 0,
+    entries INTEGER NOT NULL DEFAULT 0,
+    consecutive_losses INTEGER NOT NULL DEFAULT 0,
+    halted_reason TEXT,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (day, mode)
+  );
+  INSERT INTO risk_state_v2 (day, mode, realized_loss_cad, entries, consecutive_losses, halted_reason, updated_at)
+    SELECT day, 'paper', realized_loss_cad, entries, consecutive_losses, halted_reason, updated_at FROM risk_state;
+  DROP TABLE risk_state;
+  ALTER TABLE risk_state_v2 RENAME TO risk_state;
+  `,
 ];
 
 export function openDb(path: string): DatabaseSync {

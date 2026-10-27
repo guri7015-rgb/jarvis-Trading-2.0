@@ -15,20 +15,22 @@ export interface DayState {
 }
 
 export class RiskStateStore {
+  /** One daily state per ledger mode: a drill's entries and losses never count against paper or explore. */
   constructor(
     private readonly db: DatabaseSync,
     private readonly now: () => number,
+    private readonly mode: string = "paper",
   ) {}
 
   today(): DayState {
     const day = utcDay(this.now());
-    const r = this.db.prepare("SELECT * FROM risk_state WHERE day = ?").get(day) as
+    const r = this.db.prepare("SELECT * FROM risk_state WHERE day = ? AND mode = ?").get(day, this.mode) as
       | { realized_loss_cad: number; entries: number; consecutive_losses: number; halted_reason: string | null }
       | undefined;
     // Consecutive losses carry over from the last recorded day.
     const prev = r
       ? undefined
-      : (this.db.prepare("SELECT consecutive_losses FROM risk_state WHERE day < ? ORDER BY day DESC LIMIT 1").get(day) as { consecutive_losses: number } | undefined);
+      : (this.db.prepare("SELECT consecutive_losses FROM risk_state WHERE day < ? AND mode = ? ORDER BY day DESC LIMIT 1").get(day, this.mode) as { consecutive_losses: number } | undefined);
     return {
       day,
       realizedLossCad: r?.realized_loss_cad ?? 0,
@@ -41,11 +43,11 @@ export class RiskStateStore {
   private write(s: DayState): void {
     this.db
       .prepare(
-        `INSERT INTO risk_state (day, realized_loss_cad, entries, consecutive_losses, halted_reason, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT (day) DO UPDATE SET realized_loss_cad = excluded.realized_loss_cad, entries = excluded.entries,
+        `INSERT INTO risk_state (day, mode, realized_loss_cad, entries, consecutive_losses, halted_reason, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (day, mode) DO UPDATE SET realized_loss_cad = excluded.realized_loss_cad, entries = excluded.entries,
            consecutive_losses = excluded.consecutive_losses, halted_reason = excluded.halted_reason, updated_at = excluded.updated_at`,
       )
-      .run(s.day, s.realizedLossCad, s.entries, s.consecutiveLosses, s.haltedReason, this.now());
+      .run(s.day, this.mode, s.realizedLossCad, s.entries, s.consecutiveLosses, s.haltedReason, this.now());
   }
 
   recordEntry(): void {
