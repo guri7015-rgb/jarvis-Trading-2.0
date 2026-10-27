@@ -345,10 +345,13 @@ export class SignalEngine {
   private drill(out: { mint: string; signal: Signal; decision: RiskDecision }[], _features: Map<string, Features>): void {
     const now = this.d.clock.now();
     if (now - this.lastDrillAt < this.d.drillEveryMs!) return;
-    if (this.ledgerOpen().length > 0 || (this.d.ledger?.pending().length ?? 0) > 0) return;
+    const openNow = this.ledgerOpen();
+    if (openNow.length >= this.d.limits.maxOpenPositions || (this.d.ledger?.pending().length ?? 0) > 0) return;
     if (out.some((r) => r.decision.approved)) return;
+    const held = new Set(openNow.map((p) => p.mint));
     // Drill entries fill from a live quote, so the tape only needs a recent price: re-read features under the drill rules.
     const candidates = [...this.watch.keys()]
+      .filter((mint) => !held.has(mint))
       .map((mint) => ({ mint, a: this.assessment(mint), f: computeFeatures(mint, this.loadTrades(mint, now - 300_000), now, this.gaps(now - 300_000), DRILL_QUALITY) }))
       .filter((c) => c.a && c.a.verdict === "PASS" && now - c.a.at <= this.d.limits.maxAssessmentAgeMs && c.a.totalCostBps !== null && c.f?.last)
       .sort((x, y) => x.a!.totalCostBps! - y.a!.totalCostBps!);
@@ -381,7 +384,7 @@ export class SignalEngine {
     };
     const gate = this.d.health.gate();
     const decision = decideEntry(
-      { now, signal, failure: { action: "NONE", reasons: [] }, feedsHealthy: gate.open, feedReasons: gate.reasons, quality: c.f!.quality, assessment: c.a, lastPrice: last, state: this.d.riskState.today(), openPositions: 0, pendingOrders: 0, openRiskCad: 0, limitsRefused: this.d.limitsRefused },
+      { now, signal, failure: { action: "NONE", reasons: [] }, feedsHealthy: gate.open, feedReasons: gate.reasons, quality: c.f!.quality, assessment: c.a, lastPrice: last, state: this.d.riskState.today(), openPositions: openNow.length, pendingOrders: 0, openRiskCad: this.d.trader?.openRiskCad() ?? 0, limitsRefused: this.d.limitsRefused },
       this.d.limits,
     );
     this.stats.signals++;

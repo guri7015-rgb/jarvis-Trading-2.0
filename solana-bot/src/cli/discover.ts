@@ -63,6 +63,9 @@ const numArg = (k: string, d: number, min: number) => {
 };
 const drillEveryMs = numArg("--drill-every", 300, 15);
 const drillHoldMs = numArg("--drill-hold", 600, 30);
+// --drill-max-open <n>: positions held at once in a drill (1..6). Paper only; asked for in writing by the owner.
+const moIdx = args.indexOf("--drill-max-open");
+const drillMaxOpen = Math.min(6, Math.max(1, moIdx >= 0 ? Number(args[moIdx + 1]) || 1 : 1));
 const explore = args.includes("--explore") || drill;
 const paperMode: Mode = drill ? "paper_drill" : explore ? "paper_explore" : "paper";
 const strategyParamsFile = loadStrategyParams(resolve(cfg.DATA_DIR, "strategy-params.json"));
@@ -74,8 +77,8 @@ if (explore) {
   deps.logger.warn("EXPLORE MODE: looser entry rules, paper only; these trades never count toward live eligibility", { minRewardToRisk: riskLimits.limits.minRewardToRisk, minEdgeOverBreakEvenPct: riskLimits.limits.minEdgeOverBreakEvenPct, maxPositionCad: riskLimits.limits.maxPositionCad, dailyLossLimitCad: riskLimits.limits.dailyLossLimitCad });
 }
 if (drill) {
-  riskLimits = { ...riskLimits, limits: { ...DRILL_LIMITS } };
-  deps.logger.warn(`DRILL MODE: a forced paper entry every ${drillEveryMs / 1000}s held up to ${drillHoldMs / 1000}s, no strategy; paper only; never counts toward live eligibility`, { maxPositionCad: DRILL_LIMITS.maxPositionCad, maxLossPerTradeCad: DRILL_LIMITS.maxLossPerTradeCad, dailyLossLimitCad: DRILL_LIMITS.dailyLossLimitCad });
+  riskLimits = { ...riskLimits, limits: { ...DRILL_LIMITS, maxOpenPositions: drillMaxOpen } };
+  deps.logger.warn(`DRILL MODE: a forced paper entry every ${drillEveryMs / 1000}s held up to ${drillHoldMs / 1000}s, up to ${drillMaxOpen} open at once, no strategy; paper only; never counts toward live eligibility`, { maxPositionCad: DRILL_LIMITS.maxPositionCad, maxLossPerTradeCad: DRILL_LIMITS.maxLossPerTradeCad, dailyLossLimitCad: DRILL_LIMITS.dailyLossLimitCad });
 }
 if (args.includes("--signals")) {
   if (!assess) throw new Error("--signals needs --assess (the watchlist comes from gate assessments)");
@@ -118,6 +121,7 @@ if (args.includes("--signals")) {
       ledger,
       executor,
       quotes,
+      maxOpenPositions: riskLimits.limits.maxOpenPositions,
       riskState,
       clock: deps.clock,
       logger: deps.logger,
