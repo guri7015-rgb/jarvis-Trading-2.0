@@ -55,6 +55,8 @@ export function registerProviders(health: HealthMonitor, cfg: AppConfig): void {
   health.register("geckoterminal", { kind: "poll", maxSilenceMs: d.geckoPollMs * d.pollMaxAgeFactor, required: false });
   health.register("jupiter_tokens", { kind: "poll", maxSilenceMs: d.jupiterRecentPollMs * d.pollMaxAgeFactor, required: false });
   health.register("solana_rpc", { kind: "rpc", maxSilenceMs: RPC_HEALTH_INTERVAL_MS * 3, required: true });
+  // Holder reads are tracked apart: a free RPC refusing them is expected and covered by the provider fallback.
+  health.register("solana_rpc_holders", { kind: "rpc", maxSilenceMs: 24 * 3_600_000, required: false });
   health.register("dexscreener", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });
   // Called on demand by the assessor, so long silences are normal.
   health.register("jupiter_quote", { kind: "poll", maxSilenceMs: 24 * 3600_000, required: false });

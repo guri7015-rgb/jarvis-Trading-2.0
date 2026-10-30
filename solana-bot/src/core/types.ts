@@ -22,6 +22,8 @@ export type ProviderId =
   | "jupiter_price"
   | "dexscreener"
   | "solana_rpc"
+  /** Holder reads only: free RPCs refuse them, which must not mark the whole RPC unhealthy. */
+  | "solana_rpc_holders"
   | "solana_ws"
   | "solana_firehose"
   | "coinbase"

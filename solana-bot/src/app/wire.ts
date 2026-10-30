@@ -50,6 +50,7 @@ export function buildDeps(cfg: AppConfig): ServiceDeps {
   // Keyless 0.5 req/s, free key 1 req/s; we stay at half of that. Burst 3 lets a
   // buy and sell quote go out back to back so they describe the same market.
   const jupiter = new RateLimiter(3, cfg.JUPITER_API_KEY ? 0.5 : 0.25, clock);
+  const rpcLimiter = new RateLimiter(3, 2, clock);
   const limiters = {
     // Documented ~30/min keyless; we observed 429s sooner, so stay well under.
     geckoterminal: new RateLimiter(2, 10 / 60, clock),
@@ -62,7 +63,8 @@ export function buildDeps(cfg: AppConfig): ServiceDeps {
     // 300/min documented.
     dexscreener: new RateLimiter(5, 2, clock),
     // Public RPC: 40 req/10s per method. Helius free: 10 req/s.
-    solana_rpc: new RateLimiter(3, 2, clock),
+    solana_rpc: rpcLimiter,
+    solana_rpc_holders: rpcLimiter,
   };
   const http = new HttpClient({ fetch: fetchImpl, clock, health, limiters });
 

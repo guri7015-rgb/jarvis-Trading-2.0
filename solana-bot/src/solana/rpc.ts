@@ -102,10 +102,10 @@ export class SolanaRpc {
     private readonly budget: CallBudget,
   ) {}
 
-  private async call<T extends z.ZodType>(method: string, params: unknown[], result: T): Promise<z.infer<T>> {
+  private async call<T extends z.ZodType>(method: string, params: unknown[], result: T, provider: "solana_rpc" | "solana_rpc_holders" = "solana_rpc"): Promise<z.infer<T>> {
     if (!this.budget.tryConsume(1)) throw new BudgetExhaustedError(`daily RPC budget exhausted (${method})`);
     const res = await this.http.request({
-      provider: "solana_rpc",
+      provider,
       url: this.url,
       method: "POST",
       body: { jsonrpc: "2.0", id: this.id++, method, params },
@@ -131,6 +131,7 @@ export class SolanaRpc {
         context: z.object({ slot: z.number().int().nonnegative() }),
         value: z.array(z.object({ address: z.string().min(32).max(44), amount: z.string().regex(/^\d{1,20}$/) })).max(20),
       }),
+      "solana_rpc_holders",
     );
     return { slot: r.context.slot, accounts: r.value.map((a) => ({ address: a.address, amount: BigInt(a.amount) })) };
   }
