@@ -118,9 +118,12 @@ export function evaluateGate(i: GateInput, p: RiskPolicy): GateResult {
   if (i.holders instanceof Error) reject("HOLDER_READ", "data", msg(i.holders), "holder snapshot", "ONCHAIN_CONFIRMED");
   else {
     const h = i.holders;
-    if (h.top10WalletPct > p.maxTop10WalletPct) reject("TOP10_CONCENTRATION", "market", `${h.top10WalletPct}%`, `<= ${p.maxTop10WalletPct}%`, "ONCHAIN_CONFIRMED");
-    if (h.largestWalletPct > p.maxLargestWalletPct) reject("LARGEST_WALLET", "market", `${h.largestWalletPct}%`, `<= ${p.maxLargestWalletPct}%`, "ONCHAIN_CONFIRMED");
-    if (h.creatorPct > p.maxCreatorPct) reject("CREATOR_HOLDING", "market", `${h.creatorPct}%`, `<= ${p.maxCreatorPct}%`, "ONCHAIN_CONFIRMED");
+    const ev = h.evidence;
+    if (h.top10WalletPct > p.maxTop10WalletPct) reject("TOP10_CONCENTRATION", "market", `${h.top10WalletPct}%`, `<= ${p.maxTop10WalletPct}%`, ev);
+    if (h.largestWalletPct === null) flag("LARGEST_WALLET_UNVERIFIED", "data", "provider summary only", `<= ${p.maxLargestWalletPct}% (not checked)`, ev);
+    else if (h.largestWalletPct > p.maxLargestWalletPct) reject("LARGEST_WALLET", "market", `${h.largestWalletPct}%`, `<= ${p.maxLargestWalletPct}%`, ev);
+    if (h.creatorPct > p.maxCreatorPct) reject("CREATOR_HOLDING", "market", `${h.creatorPct}%`, `<= ${p.maxCreatorPct}%`, ev);
+    if (ev === "PROVIDER_REPORTED") flag("HOLDERS_FROM_PROVIDER", "data", "Jupiter audit summary", "own on-chain read", ev);
   }
 
   return { verdict: rejects.length ? "REJECT" : "PASS", rejects, flags };

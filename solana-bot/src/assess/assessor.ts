@@ -55,6 +55,8 @@ export interface AssessorDeps {
   clock: Clock;
   logger: Logger;
   policy: RiskPolicy;
+  /** When the RPC refuses holder reads, ask a provider for a holder summary instead (labelled PROVIDER_REPORTED). */
+  providerHolders?: (mint: string) => Promise<HolderReport | Error>;
 }
 
 const PRIORITY_CACHE_MS = 30_000;
@@ -260,6 +262,14 @@ export class Assessor {
       if (/429|rate limited/i.test(holders.message) && !holders.message.startsWith("holder data paused")) {
         this.holderBreakerUntil = this.d.clock.now() + HOLDER_BREAKER_MS;
         this.d.logger.warn("holder data unavailable from this RPC; pausing holder checks", { minutes: HOLDER_BREAKER_MS / 60_000 });
+      }
+      // Not for the quick test (speed), and only for RPC refusals, never for a bad mint.
+      if (!quick && this.d.providerHolders && !(mint instanceof Error) && /429|rate limited|paused|403|not available/i.test(holders.message)) {
+        try {
+          holders = await this.d.providerHolders(c.mint);
+        } catch (e2) {
+          holders = new Error(`holder read refused by RPC; provider fallback failed: ${asError(e2).message.slice(0, 80)}`);
+        }
       }
     }
 

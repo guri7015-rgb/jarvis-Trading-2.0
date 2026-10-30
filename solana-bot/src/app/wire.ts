@@ -19,6 +19,8 @@ import { budgetStore } from "../storage/sessions.ts";
 import { registerProviders, type ServiceDeps } from "./discoveryService.ts";
 import { Assessor } from "../assess/assessor.ts";
 import { TokenRegistry } from "../discovery/registry.ts";
+import { fetchJupiterAudit } from "../providers/jupiterTokens.ts";
+import { holderReportFromProvider } from "../risk/holders.ts";
 import { FxService } from "../market/fx.ts";
 import { QuoteClient } from "../market/quotes.ts";
 import { DEFAULT_POLICY, type RiskPolicy } from "../risk/policy.ts";
@@ -72,8 +74,14 @@ export function buildDeps(cfg: AppConfig): ServiceDeps {
 }
 
 /** Phase 3 assessor on top of the discovery deps. Read-only: quotes, never transactions. */
-export function buildAssessor(d: ServiceDeps, policy: RiskPolicy = DEFAULT_POLICY): Assessor {
+export function buildAssessor(d: ServiceDeps, policy: RiskPolicy = DEFAULT_POLICY, o: { providerHolders?: boolean } = {}): Assessor {
   return new Assessor({
+    providerHolders: o.providerHolders
+      ? async (mint) => {
+          const audit = await fetchJupiterAudit(d.http, d.cfg.JUPITER_API_KEY, mint);
+          return audit ? holderReportFromProvider(audit) : new Error("provider has no holder summary for this coin");
+        }
+      : undefined,
     db: d.db,
     registry: new TokenRegistry(d.db),
     rpc: d.rpc,

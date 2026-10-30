@@ -36,6 +36,8 @@ const Token = z.object({
     .object({
       mintAuthorityDisabled: z.boolean().optional(),
       freezeAuthorityDisabled: z.boolean().optional(),
+      topHoldersPercentage: z.number().finite().min(0).max(100).optional(),
+      devBalancePercentage: z.number().finite().min(0).max(100).optional(),
     })
     .partial()
     .optional(),
@@ -184,4 +186,20 @@ export async function fetchJupiterCategory(
     maxRetries: 0,
   });
   return parseJupiterRecent(body, now());
+}
+
+/** Jupiter's holder summary for one coin, or undefined if it reports none. */
+export async function fetchJupiterAudit(http: HttpClient, apiKey: string | undefined, mint: string): Promise<{ topHoldersPercentage?: number; devBalancePercentage?: number } | undefined> {
+  const body = await http.request({
+    provider: "jupiter_tokens",
+    url: `https://api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mint)}`,
+    schema: JupiterRecentSchema,
+    headers: apiKey ? { "x-api-key": apiKey } : {},
+    maxRetries: 0,
+  });
+  for (const item of body) {
+    const p = Token.safeParse(item);
+    if (p.success && p.data.id === mint) return p.data.audit ?? undefined;
+  }
+  return undefined;
 }

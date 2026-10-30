@@ -6,7 +6,7 @@ import { Assessor } from "../src/assess/assessor.ts";
 import { TokenRegistry } from "../src/discovery/registry.ts";
 import type { FxService } from "../src/market/fx.ts";
 import { parseQuote, QuoteError, type QuoteClient, type QuoteRequest } from "../src/market/quotes.ts";
-import { analyzeHolders, INCINERATOR } from "../src/risk/holders.ts";
+import { holderReportFromProvider, analyzeHolders, INCINERATOR } from "../src/risk/holders.ts";
 import { DEFAULT_POLICY } from "../src/risk/policy.ts";
 import { addressToBytes, derivePumpBondingCurve } from "../src/solana/address.ts";
 import { MINTS, PROGRAMS } from "../src/solana/programs.ts";
@@ -218,6 +218,36 @@ describe("Assessor end to end (fake network)", () => {
     const second = await a.tick();
     expect(second?.gate.rejects.find((r) => r.rule === "HOLDER_READ")?.observed).toMatch(/paused/);
     expect(largestCalls).toBe(1);
+  });
+
+  it("falls back to the provider's holder summary when the RPC refuses, labelled and still enforced", async () => {
+    const { a } = await setup();
+    const d = (a as unknown as { d: { rpc: Record<string, unknown>; providerHolders?: unknown } }).d;
+    d.rpc.getTokenLargestAccounts = async () => {
+      throw new Error("rate limited (429)");
+    };
+    let top = 20;
+    d.providerHolders = async () => holderReportFromProvider({ topHoldersPercentage: top, devBalancePercentage: 3 });
+    a.addCandidates([{ mint: PUMP_MINT, source: "test", liquidityUsd: 50_000 }]);
+    const ok = await a.tick();
+    expect(ok?.gate.verdict).toBe("PASS");
+    const flags = ok!.gate.flags.map((f) => f.rule);
+    expect(flags).toContain("HOLDERS_FROM_PROVIDER");
+    expect(flags).toContain("LARGEST_WALLET_UNVERIFIED");
+    // The concentration limit still applies to the provider's figure.
+    top = 60;
+    const busy = (a as unknown as { holderBreakerUntil: number });
+    busy.holderBreakerUntil = 0;
+    const { a: a2 } = await setup();
+    const d2 = (a2 as unknown as { d: { rpc: Record<string, unknown>; providerHolders?: unknown } }).d;
+    d2.rpc.getTokenLargestAccounts = async () => {
+      throw new Error("rate limited (429)");
+    };
+    d2.providerHolders = async () => holderReportFromProvider({ topHoldersPercentage: 60 });
+    a2.addCandidates([{ mint: PUMP_MINT, source: "test", liquidityUsd: 50_000 }]);
+    const bad = await a2.tick();
+    expect(bad?.gate.rejects.map((r) => `${r.rule}:${r.evidence}`)).toEqual(["TOP10_CONCENTRATION:PROVIDER_REPORTED"]);
+    expect(holderReportFromProvider({})).toBeInstanceOf(Error);
   });
 
   it("does nothing when the RPC budget is nearly used up", async () => {

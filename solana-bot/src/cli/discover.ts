@@ -49,7 +49,10 @@ const cfg = loadConfig();
 const deps = buildDeps(cfg);
 // --assess: also run the Phase 3 tradability assessor (read-only quotes).
 const assess = args.includes("--assess");
-const assessor = assess ? buildAssessor(deps) : undefined;
+// Paper explore and drill only: when the RPC refuses holder reads, use Jupiter's holder summary instead.
+const providerHolders = args.includes("--explore") || args.includes("--drill");
+const assessor = assess ? buildAssessor(deps, undefined, { providerHolders }) : undefined;
+if (assessor && providerHolders) deps.logger.warn("holder check falls back to Jupiter's summary when the RPC refuses it (PROVIDER_REPORTED; paper only)");
 // --scan: one firehose over pump.fun and PumpSwap, ranked in memory; movers go to the fast safety lane.
 const scan = args.includes("--scan");
 if (scan && !assess) throw new Error("--scan needs --assess");

@@ -77,3 +77,7 @@ caffeinate -i npm run discover -- --assess --signals
 ## Helius credits and the scanner
 
 The scanner (`--scan`) listens to every pump.fun and PumpSwap transaction, about 700 messages a second. It uses `SOLANA_FIREHOSE_WS_URL`, which defaults to Solana's free public WebSocket. Do not point it at your Helius WebSocket: Helius counts those messages against the plan and a free plan is exhausted in under an hour, after which every call returns 429 until the monthly reset. Your Helius key stays on `SOLANA_RPC_URL` and `SOLANA_WS_URL` for the calls that need it (holder reads, confirmations, per-coin feeds). Check usage at dashboard.helius.dev.
+
+## When holder reads are refused (free public RPC, or a used-up plan)
+
+`npm run rpc-check` tests every method the bot needs and prints OK or FAIL for each, without showing the key. If `getTokenLargestAccounts` fails, the bot cannot read holders on chain. In `--explore` and `--drill` (paper only) it then uses Jupiter's holder summary for that coin: the top-holders share and the developer's share. The same limits apply (top holders 35%, developer 10%). The largest single wallet cannot be checked from the summary; the check is flagged LARGEST_WALLET_UNVERIFIED and HOLDERS_FROM_PROVIDER, and the evidence is labelled PROVIDER_REPORTED. Jupiter does not document whether its figure excludes pool vaults, so a pump.fun curve may count against it, which errs on the safe side.

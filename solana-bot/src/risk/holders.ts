@@ -44,12 +44,14 @@ export interface HolderReport {
   holders: Holder[];
   /** Sum of the 10 largest wallet-class holders, % of supply. */
   top10WalletPct: number;
-  largestWalletPct: number;
+  /** null when only a provider's summary is available (no per-wallet list). */
+  largestWalletPct: number | null;
   /** Creator's direct holding in the top 20, % of supply (0 if not in the top 20). */
   creatorPct: number;
   /** Share of supply in pool/curve vaults among the top 20. */
   poolPct: number;
-  evidence: "ONCHAIN_CONFIRMED";
+  /** ONCHAIN_CONFIRMED: our own read. PROVIDER_REPORTED: Jupiter's audit summary, used when the RPC refuses holder reads. */
+  evidence: "ONCHAIN_CONFIRMED" | "PROVIDER_REPORTED";
   /** getTokenLargestAccounts returns at most 20 accounts. */
   note: string;
 }
@@ -109,3 +111,23 @@ export async function analyzeHolders(rpc: SolanaRpc, mint: string, supply: bigin
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Fallback when the RPC refuses getTokenLargestAccounts: Jupiter Tokens v2
+ * reports a top-holders share and the developer's share. Provider-reported,
+ * not read by us; whether it excludes pool vaults is not documented, so a
+ * pump.fun curve may count against it (conservative). No largest-wallet figure.
+ */
+export function holderReportFromProvider(audit: { topHoldersPercentage?: number; devBalancePercentage?: number }): HolderReport | Error {
+  if (audit.topHoldersPercentage === undefined) return new Error("provider has no top-holders figure for this coin");
+  return {
+    slot: 0,
+    holders: [],
+    top10WalletPct: Math.round(audit.topHoldersPercentage * 100) / 100,
+    largestWalletPct: null,
+    creatorPct: Math.round((audit.devBalancePercentage ?? 0) * 100) / 100,
+    poolPct: 0,
+    evidence: "PROVIDER_REPORTED",
+    note: "Jupiter audit summary; top holders as Jupiter defines them; no per-wallet list",
+  };
+}
