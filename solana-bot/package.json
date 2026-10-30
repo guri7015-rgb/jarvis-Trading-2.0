@@ -22,7 +22,8 @@
     "tape": "tsx src/cli/tape.ts",
     "tune": "tsx src/cli/tune.ts",
     "evidence": "tsx src/cli/evidence.ts",
-    "why": "tsx src/cli/why.ts"
+    "why": "tsx src/cli/why.ts",
+    "rpc-check": "tsx src/cli/rpcCheck.ts"
   },
   "dependencies": {
     "@solana/kit": "8.4.0",
