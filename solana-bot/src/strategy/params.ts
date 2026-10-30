@@ -35,18 +35,20 @@ export const DEFAULT_PARAMS: StrategyParams = { A: { ...A_PARAMS }, B: { ...B_PA
  * is unchanged. Nothing here is a tuned result.
  */
 export const EXPLORE_PARAMS: StrategyParams = {
-  A: { ...A_PARAMS, minImpulsePct: 0.05, maxConsolidationRangePct: 0.1, minBuyers60: 5, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, maxExtensionPct: 0.05, targetImpulseFraction: 0.8 },
-  B: { ...B_PARAMS, minRangeTrades: 10, minBreakoutPct: 0.01, minRateAccel: 1.5, minBuyers60: 5, maxTopBuyerShare: 0.4, targetRangeFraction: 0.8 },
+  A: { ...A_PARAMS, minImpulsePct: 0.05, maxConsolidationRangePct: 0.15, minBuyers60: 5, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, maxExtensionPct: 0.05, targetImpulseFraction: 0.8 },
+  B: { ...B_PARAMS, maxRangePct: 0.4, minRangeTrades: 10, minBreakoutPct: 0.01, minRateAccel: 1.5, minBuyers60: 5, maxTopBuyerShare: 0.4, targetRangeFraction: 0.8 },
   C: { ...C_PARAMS, maxTokenAgeMs: 15 * 60_000, minTrades30: 6, minRateAccel: 1.5, minNewBuyers30: 4, minImbalance60: 0.2, maxTopBuyerShare: 0.4, maxRepeatedSizeRatio: 0.7, minRet60: 0.02, targetPct: 0.15 },
   D: { ...D_PARAMS },
-  E: { ...E_PARAMS, minRunPct: 0.1, minBuyers10: 2, minNewBuyers30: 3, minImbalance60: 0, maxTopBuyerShare: 0.45, maxRepeatedSizeRatio: 0.7, targetFractionToHigh: 0.8 },
+  E: { ...E_PARAMS, maxPullbackOfRun: 0.75, minRunPct: 0.1, minBuyers10: 2, minNewBuyers30: 3, minImbalance60: 0, maxTopBuyerShare: 0.45, maxRepeatedSizeRatio: 0.7, targetFractionToHigh: 0.8 },
 };
 
 /** Drill-mode data quality: the entry fills from a live quote, so the tape only needs a recent price. */
 export const DRILL_QUALITY = { minTrades180s: 1, maxSecondsSinceLastTrade: 900, maxMedianLagS: 30, blockingGapMs: 30_000 };
 
 /** Explore-mode data quality: half the trades, a minute of silence allowed. Lag and gap rules unchanged. */
-export const EXPLORE_QUALITY = { minTrades180s: 10, maxSecondsSinceLastTrade: 60, maxMedianLagS: 10, blockingGapMs: 2_000 };
+// The free public WebSocket drops every 10-30 s; reconnects take 0.8 s at the median and 1.1 s at p90 (measured 2026-10-30),
+// with the odd one past 2 s. A 5 s threshold keeps real outages blocking without the routine reconnects shutting every pattern off.
+export const EXPLORE_QUALITY = { minTrades180s: 10, maxSecondsSinceLastTrade: 60, maxMedianLagS: 10, blockingGapMs: 5_000 };
 
 const numRecord = (template: Record<string, number>) => z.object(Object.fromEntries(Object.keys(template).map((k) => [k, z.number().finite().optional()]))).strict();
 const FileSchema = z

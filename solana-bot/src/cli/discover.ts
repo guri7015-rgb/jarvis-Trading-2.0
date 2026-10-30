@@ -332,7 +332,14 @@ if (args.includes("--dashboard")) {
           outcomes,
           majors,
           movers: scanner ? () => ({ list: moversNow, stats: scanner!.stats }) : undefined,
-          buyersFor: scanner ? (mint: string) => new Set(scanner!.recent(mint).filter((x) => x.side === "buy" && deps.clock.now() - x.t <= 60_000).map((x) => x.wallet)).size : undefined,
+          buyersFor: scanner
+            ? (mint: string) => {
+                // Curve trades are keyed by mint, PumpSwap trades by pool.
+                const pool = (deps.db.prepare("SELECT pool FROM pools WHERE mint = ? AND venue = 'pumpswap' ORDER BY first_seen_at DESC LIMIT 1").get(mint) as { pool: string } | undefined)?.pool;
+                const ticks = [...scanner!.recent(mint), ...(pool ? scanner!.recent(pool) : [])];
+                return new Set(ticks.filter((x) => x.side === "buy" && deps.clock.now() - x.t <= 60_000).map((x) => x.wallet)).size;
+              }
+            : undefined,
           watched: () => engine?.watched() ?? [],
           mode: drill ? "PAPER DRILL" : explore ? "PAPER EXPLORE" : "PAPER",
           now: () => deps.clock.now(),

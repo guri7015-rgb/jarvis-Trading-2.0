@@ -50,6 +50,11 @@
   .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
   .empty { color: var(--muted); font-style: italic; padding: 6px 0; font-size: 13px; }
   .why { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .addr { display: flex; align-items: center; gap: 6px; margin-top: 6px; min-width: 0; }
+  .addr code { font-family: var(--mono); font-size: 10px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; overflow-x: auto; white-space: nowrap; flex: 1; min-width: 0; user-select: all; }
+  .copy { font-size: 11px; padding: 2px 8px; border-radius: 6px; flex: none; }
+  .copy.done { background: var(--gobg); border-color: var(--go); color: var(--go); }
+  .addr a { font-size: 11px; flex: none; }
 </style>
 </head>
 <body>
@@ -67,11 +72,11 @@
 <div class="now" id="now"></div>
 
 <div class="cols">
-  <div class="col"><h2>1 · LAUNCHED <span class="count" id="n1">0</span></h2><p class="sub">Born in the last 3 minutes. Newest on top.</p><div id="c1"></div></div>
-  <div class="col"><h2>2 · QUICK TEST PASSED <span class="count" id="n2">0</span></h2><p class="sub">Can be sold back, no mint or freeze switch, real SOL in it, trip cost known. Holder check still running.</p><div id="c2"></div></div>
-  <div class="col"><h2>3 · <span class="tag go">BUY</span> <span class="count" id="n3">0</span></h2><p class="sub">EARLY: brand new, buyers piling in (C). MOMENTUM: rested and going again (A), or broke its high (B). Green = cleared every gate. Amber = pattern there, not a buy.</p><div id="c3"></div></div>
-  <div class="col"><h2>4 · <span class="tag purple">DIP HUNT</span> <span class="count" id="n4">0</span></h2><p class="sub">Missed the first move? It ran, pulled back, selling dried up, buyers are back. Pattern E.</p><div id="c4"></div></div>
-  <div class="col"><h2>5 · <span class="tag red">SELL</span> <span class="count" id="n5">0</span></h2><p class="sub">Dump, broad selling, failed breakout or liquidity leaving. Get out whether or not you hold it.</p><div id="c5"></div></div>
+  <div class="col"><h2>1 · NEW COINS <span class="count" id="n1">0</span></h2><p class="sub">Made in the last 3 minutes. Newest on top.</p><div id="c1"></div></div>
+  <div class="col"><h2>2 · PASSED SAFETY <span class="count" id="n2">0</span></h2><p class="sub">You can sell it back. Nobody can print more or freeze it. Real money in it. No one person owns too much.</p><div id="c2"></div></div>
+  <div class="col"><h2>3 · <span class="tag go">BUY</span> <span class="count" id="n3">0</span></h2><p class="sub">Green = buy. Amber = good pattern, but don't buy, and it says why.</p><div id="c3"></div></div>
+  <div class="col"><h2>4 · <span class="tag purple">DIP HUNT</span> <span class="count" id="n4">0</span></h2><p class="sub">Missed the first jump? It went up, came back down, and buyers are returning.</p><div id="c4"></div></div>
+  <div class="col"><h2>5 · <span class="tag red">SELL</span> <span class="count" id="n5">0</span></h2><p class="sub">Price is crashing or everyone is selling. If you hold it, sell.</p><div id="c5"></div></div>
 </div>
 <p class="why" style="margin-top:10px">Everything here is price and trade data from the chain; "buyers back" means distinct wallets, not people talking. No news feed is connected.</p>
 </div>
@@ -81,7 +86,13 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const short = (m) => m.slice(0, 4) + "…" + m.slice(-4);
 const ago = (s) => s < 60 ? s + "s" : s < 3600 ? Math.round(s / 60) + " min" : (s / 3600).toFixed(1) + " h";
-const px = (x) => x === null || x === undefined ? "–" : x < 0.001 ? Number(x).toExponential(3) : Number(x).toLocaleString(undefined, { maximumFractionDigits: 2 });
+// Prices in plain decimals, 4 meaningful digits: 0.00001085, never 1.085e-5.
+const px = (x) => {
+  if (x === null || x === undefined || !isFinite(x)) return "–";
+  if (x >= 1) return Number(x).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const d = Math.min(12, Math.max(2, 3 - Math.floor(Math.log10(Math.abs(x)))));
+  return Number(x).toFixed(d);
+};
 const pct = (x, d = 1) => x === null || x === undefined ? "–" : (x > 0 ? "+" : "") + Number(x).toFixed(d) + "%";
 const cls = (x) => x > 0 ? "up" : x < 0 ? "down" : "";
 let META = {}, LIVE = {}, seen = new Set(), first = true, soundOn = false, audio;
@@ -105,33 +116,92 @@ function tok(mint) {
   const img = m.icon ? `<img src="${esc(m.icon)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='${esc(initials)}'">` : esc(initials);
   return `<div class="tok" title="${esc(mint)}"><span class="avatar">${img}</span><div style="min-width:0"><div class="t1">${esc(label)}${m.name && m.symbol ? `<span class="nm">${esc(m.name)}</span>` : ""}</div><div class="t2">${esc(short(mint))}</div></div></div>`;
 }
+// Many coins share a name. The address is the only exact ID: copy it, paste it into Axiom or any app.
+function addr(mint) {
+  return `<div class="addr"><code title="This coin's exact address">${esc(mint)}</code><button type="button" class="copy" data-copy="${esc(mint)}">Copy</button><a href="https://dexscreener.com/solana/${encodeURIComponent(mint)}" target="_blank" rel="noopener">chart</a></div>`;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest && e.target.closest("button.copy");
+  if (!b) return;
+  const text = b.dataset.copy;
+  const ok = () => { b.textContent = "Copied"; b.classList.add("done"); setTimeout(() => { b.textContent = "Copy"; b.classList.remove("done"); }, 1500); };
+  const fallback = () => { const code = b.parentNode.querySelector("code"); const r = document.createRange(); r.selectNodeContents(code); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); try { document.execCommand("copy"); ok(); } catch { b.textContent = "Press ⌘C"; } };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, fallback); else fallback();
+});
 function zone(s) {
   const l = LIVE[s.mint];
   if (!l) return `<span class="tag grey">no live price</span>`;
   const moved = s.refPrice ? (l.price / s.refPrice - 1) * 100 : null;
   let st;
-  if (s.stop !== null && l.price <= s.stop) st = `<span class="tag red">STOPPED OUT</span>`;
-  else if (s.target !== null && l.price >= s.target) st = `<span class="tag go">TARGET HIT</span>`;
-  else if (s.maxEntryPrice !== null && l.price <= s.maxEntryPrice) st = `<span class="tag go">IN ZONE</span>`;
-  else st = `<span class="tag amber">GONE, ABOVE ENTRY</span>`;
-  return `${st}<span>now <b>${px(l.price)}</b></span><span class="${cls(moved)}">${pct(moved)} since signal</span>`;
+  if (s.stop !== null && l.price <= s.stop) st = `<span class="tag red">HIT THE STOP: WOULD HAVE LOST</span>`;
+  else if (s.target !== null && l.price >= s.target) st = `<span class="tag go">HIT THE TARGET: WOULD HAVE WON</span>`;
+  else if (s.maxEntryPrice !== null && l.price <= s.maxEntryPrice) st = `<span class="tag go">STILL OK TO BUY</span>`;
+  else st = `<span class="tag amber">TOO LATE: PRICE ALREADY RAN</span>`;
+  return `${st}<span>price now <b>${px(l.price)}</b></span><span class="${cls(moved)}">${pct(moved)} since the card</span>`;
+}
+// Turn the pattern's raw numbers into one plain sentence.
+function plainWhy(s) {
+  const r = (s.why || []).join(" | ");
+  const n = (re) => { const m = re.exec(r); return m ? m[1] : null; };
+  const buyers = n(/(\d+) buyers\/60s/);
+  const tail = buyers ? ` ${buyers} different wallets bought in the last minute.` : "";
+  switch (s.strategy) {
+    case "A_continuation": return `Price jumped ${n(/impulse ([\d.]+)%/) ?? "?"}%, rested, and is now going up again.${tail}`;
+    case "B_breakout_retest": return `Price broke above its recent high, dipped to test it, and held.${tail}`;
+    case "B_breakout_no_retest": return `Price is breaking above its recent high and trading is speeding up.${tail}`;
+    case "C_early_acceleration": return `Brand-new coin. Buyers are rushing in right now.${n(/(\d+) new buyers/) ? " " + n(/(\d+) new buyers/) + " new wallets in 30 seconds." : ""}`;
+    case "E_dip_hunt": return `It went up ${n(/ran ([\d.]+)%/) ?? "?"}%, dropped back, and buyers are coming back in.${n(/(\d+) buyers\/10s/) ? " " + n(/(\d+) buyers\/10s/) + " buyers in the last 10 seconds." : ""}`;
+    default: return r;
+  }
 }
 const kindTag = (s) => s.strategy === "C_early_acceleration" ? `<span class="tag go">EARLY</span>` : s.strategy === "E_dip_hunt" ? `<span class="tag purple">DIP</span>` : `<span class="tag blue">MOMENTUM</span>`;
 function sigCard(s, color, fresh) {
   const blocked = s.kind !== "ENTER";
   return `<div class="card ${blocked ? "amber" : color} ${fresh ? "fresh" : ""}">
     <div class="head">${tok(s.mint)}<div class="age">${kindTag(s)} ${ago(s.ageS)} ago</div></div>
-    ${blocked ? `<p class="say">Pattern is there. <b>Not a buy</b>: ${esc(whyNot(s))}</p>` : `<p class="say"><b>Buy</b> up to <b>${px(s.maxEntryPrice)}</b>. <b>Sell</b> at <b>${px(s.target)}</b> <span class="up">(${pct(s.targetPct)})</span>. <b>Out</b> at <b>${px(s.stop)}</b> <span class="down">(${pct(s.stopPct === null ? null : -s.stopPct)})</span>.<br>Max <b>CAD ${s.sizeCad ? s.sizeCad.toFixed(0) : "–"}</b>, risk <b>CAD ${s.plannedLossCad ? s.plannedLossCad.toFixed(2) : "–"}</b>. ${s.timeStopS ? Math.round(s.timeStopS / 60) + " min max." : ""}</p>`}
+    <p class="say">${esc(plainWhy(s))}</p>
+    ${blocked ? `<p class="say"><b>Don't buy.</b> ${esc(whyNot(s))}</p>` : `<p class="say"><b>Buy</b> if the price is <b>${px(s.maxEntryPrice)}</b> or lower.<br><b>Sell</b> when it reaches <b>${px(s.target)}</b> <span class="up">(${pct(s.targetPct)})</span>.<br><b>Sell right away</b> if it falls to <b>${px(s.stop)}</b> <span class="down">(${pct(s.stopPct === null ? null : -s.stopPct)})</span>.<br>Spend up to <b>CAD ${s.sizeCad ? s.sizeCad.toFixed(0) : "–"}</b>. Most you'd lose: <b>CAD ${s.plannedLossCad ? s.plannedLossCad.toFixed(2) : "–"}</b>.${s.timeStopS ? ` Sell after <b>${Math.round(s.timeStopS / 60)} min</b> no matter what.` : ""}</p>`}
     <div class="live">${zone(s)}</div>
-    <div class="why">${esc((s.why || []).join(" · "))}</div>
+    ${addr(s.mint)}
   </div>`;
 }
 function whyNot(s) {
-  if (s.blockedBy === "COSTS") { const m = /expected ([\d.]+)% vs break-even ([\d.]+)%/.exec(s.blockedDetail || ""); return m ? `move ${m[1]}%, trip costs ${m[2]}%.` : "costs eat the move."; }
-  if (s.blockedBy === "TOKEN_GATE") return (s.blockedDetail || "").includes("research") ? "holder check not done yet." : "safety check: " + (s.blockedDetail || "not passed") + ".";
-  if (s.blockedBy === "PORTFOLIO") return (s.blockedDetail || "daily limit").replace(/^.*?: /, "") + ".";
-  if (s.blockedBy === "DATA_HEALTH") return "feed hiccup at that moment.";
-  return (s.blockedBy || "") + " " + (s.blockedDetail || "");
+  const d = s.blockedDetail || "";
+  if (s.blockedBy === "COSTS") {
+    const m = /expected ([\d.]+)% vs break-even ([\d.]+)%/.exec(d);
+    if (!m) return "Buying and selling would cost too much for this move.";
+    return Number(m[1]) <= Number(m[2])
+      ? `It might go up ${m[1]}%, but buying and selling costs ${m[2]}%. You'd lose money even if it works.`
+      : `It might go up ${m[1]}%, but buying and selling costs ${m[2]}%. What's left is too small for the risk.`;
+  }
+  if (s.blockedBy === "TOKEN_GATE") {
+    if (d.includes("research")) return "The safety check isn't finished yet.";
+    if (/old/.test(d)) return "The safety check is out of date. Waiting for a fresh one.";
+    return "The coin failed the safety check.";
+  }
+  if (s.blockedBy === "PORTFOLIO") {
+    if (/already open/.test(d)) return "Already holding a coin. One at a time.";
+    if (/entries today/.test(d)) return "Used up today's 3 trades.";
+    if (/losses in a row/.test(d)) return "3 losses in a row. Taking a break for the day.";
+    if (/exceeds/.test(d)) return "Today's loss limit is nearly used up.";
+    return "A daily limit is reached.";
+  }
+  if (s.blockedBy === "SIZING") return "The safe place to sell is too far below. The trade would be too small to be worth the fees.";
+  if (s.blockedBy === "DATA_HEALTH") return "The price feed dropped for a moment. Not safe to decide.";
+  if (s.blockedBy === "ENTRY_PRICE") return "Price already ran past the buy level.";
+  return d || s.blockedBy || "";
+}
+// Sell reasons in plain words.
+function plainSell(reasons) {
+  return reasons.map((r) => {
+    let m;
+    if ((m = /dropped -?([\d.]+)% in 30s/.exec(r))) return `Price fell ${m[1]}% in 30 seconds.`;
+    if ((m = /broad selling \(imbalance (-?[\d.]+), (\d+) sellers\)/.exec(r))) return `Lots of people are selling (${m[2]} sellers) and few are buying.`;
+    if (/breakout failed/.test(r)) return "It fell back below the level it had broken.";
+    if (/below invalidation/.test(r)) return "It fell below the safe level.";
+    if (/draining/.test(r)) return "Money is leaving the coin's pool.";
+    return r;
+  }).join(" ");
 }
 function render(s) {
   META = s.meta || {}; LIVE = s.live || {};
@@ -140,25 +210,25 @@ function render(s) {
   // ONE THING NOW: the newest buy that cleared every gate in the last 3 minutes, else nothing.
   const buys = s.signals.filter((x) => x.kind === "ENTER" && x.strategy !== "DRILL" && x.ageS <= 180);
   const sellNow = b.sell.filter((x) => x.ageS <= 120);
-  if (buys.length) { const x = buys[0]; $("now").className = "now go"; $("now").innerHTML = `<span class="tag go">BUY NOW</span>${tok(x.mint)}<div class="big">up to <b>${px(x.maxEntryPrice)}</b> · out at <b>${px(x.stop)}</b> · max CAD ${x.sizeCad ? x.sizeCad.toFixed(0) : "–"}</div><div class="live">${zone(x)}</div><div class="sub">${ago(x.ageS)} ago · ${esc(strat(x.strategy))}</div>`; }
-  else if (sellNow.length) { const x = sellNow[0]; $("now").className = "now red"; $("now").innerHTML = `<span class="tag red">SELL</span>${tok(x.mint)}<div class="big">get out</div><div class="sub">${esc(x.reasons.join("; "))} · ${ago(x.ageS)} ago</div>`; }
-  else { $("now").className = "now"; $("now").innerHTML = `<div class="big" style="color:var(--muted)">Nothing to do right now</div><div class="sub">${b.launched.length} launches in 3 min · ${b.quickPassed.length} passed the quick test · ${b.buyEarly.length + b.dipHunt.length} patterns, none cleared cost</div>`; }
+  if (buys.length) { const x = buys[0]; $("now").className = "now go"; $("now").innerHTML = `<span class="tag go">BUY NOW</span>${tok(x.mint)}<div class="big">buy at <b>${px(x.maxEntryPrice)}</b> or lower · sell at <b>${px(x.target)}</b> · sell fast at <b>${px(x.stop)}</b> · spend up to CAD ${x.sizeCad ? x.sizeCad.toFixed(0) : "–"}</div><div class="live">${zone(x)}</div><div class="sub">${ago(x.ageS)} ago · ${esc(plainWhy(x))}</div><div style="flex-basis:100%">${addr(x.mint)}</div>`; }
+  else if (sellNow.length) { const x = sellNow[0]; $("now").className = "now red"; $("now").innerHTML = `<span class="tag red">SELL</span>${tok(x.mint)}<div class="big">sell now if you hold it</div><div class="sub">${esc(plainSell(x.reasons))} · ${ago(x.ageS)} ago</div><div style="flex-basis:100%">${addr(x.mint)}</div>`; }
+  else { $("now").className = "now"; $("now").innerHTML = `<div class="big" style="color:var(--muted)">Nothing to do right now</div><div class="sub">${b.launched.length} new coins in 3 min · ${b.quickPassed.length} passed the safety check · no buy worth its cost right now</div>`; }
   let newBuy = 0, newSell = 0, newOther = 0;
   for (const x of s.signals) if (!seen.has("s" + x.id)) { seen.add("s" + x.id); if (!first) { if (x.kind === "ENTER") newBuy++; else newOther++; } }
   for (const x of b.sell) if (!seen.has("x" + x.mint + x.at)) { seen.add("x" + x.mint + x.at); if (!first) newSell++; }
   if (newBuy) beep("buy"); else if (newSell) beep("sell"); else if (newOther) beep("other");
   const fresh = (x) => !first && x.ageS < 60;
   $("n1").textContent = b.launched.length;
-  $("c1").innerHTML = b.launched.length ? b.launched.map((t) => `<div class="card"><div class="head">${tok(t.mint)}<div class="age">${ago(t.ageS)}</div></div><div class="tags"><span class="tag ${t.confirmed ? "go" : "grey"}">${t.confirmed ? "ON CHAIN" : "CHECKING"}</span><span class="tag grey">${esc(t.venue === "pump_curve" ? "pump.fun" : t.venue || "?")}</span>${t.buyers60 !== null ? `<span class="tag ${t.buyers60 >= 8 ? "go" : "grey"}">${t.buyers60} BUYERS / MIN</span>` : ""}</div></div>`).join("") : `<div class="empty">No launches in the last 3 minutes.</div>`;
+  $("c1").innerHTML = b.launched.length ? b.launched.map((t) => `<div class="card"><div class="head">${tok(t.mint)}<div class="age">${ago(t.ageS)}</div></div><div class="tags"><span class="tag ${t.confirmed ? "go" : "grey"}">${t.confirmed ? "ON CHAIN" : "CHECKING"}</span><span class="tag grey">${esc(t.venue === "pump_curve" ? "pump.fun" : t.venue || "?")}</span>${t.buyers60 !== null ? `<span class="tag ${t.buyers60 >= 8 ? "go" : "grey"}">${t.buyers60} BUYERS / MIN</span>` : ""}</div>${addr(t.mint)}</div>`).join("") : `<div class="empty">No new coins in the last 3 minutes.</div>`;
   $("n2").textContent = b.quickPassed.length;
-  $("c2").innerHTML = b.quickPassed.length ? b.quickPassed.map((t) => `<div class="card ${t.full ? "go" : ""}"><div class="head">${tok(t.mint)}<div class="age">${ago(t.ageS)}</div></div><div class="tags"><span class="tag ${t.full ? "go" : "amber"}">${t.full ? "FULL CHECK PASSED" : "QUICK TEST PASSED"}</span>${t.costBps !== null ? `<span class="tag ${t.costBps <= 200 ? "go" : t.costBps <= 300 ? "amber" : "red"}">TRIP ${(t.costBps / 100).toFixed(1)}%</span>` : ""}${t.buyers60 !== null ? `<span class="tag grey">${t.buyers60} BUYERS / MIN</span>` : ""}</div>${t.full ? "" : `<div class="why">waiting on: ${esc(t.waitingOn.join(", ").replace(/_/g, " ").toLowerCase())}</div>`}</div>`).join("") : `<div class="empty">Nothing clean in the last 15 minutes.</div>`;
+  $("c2").innerHTML = b.quickPassed.length ? b.quickPassed.map((t) => `<div class="card ${t.full ? "go" : ""}"><div class="head">${tok(t.mint)}<div class="age">${ago(t.ageS)}</div></div><div class="tags"><span class="tag ${t.full ? "go" : "amber"}">${t.full ? "SAFE TO WATCH" : "QUICK CHECK OK"}</span>${t.costBps !== null ? `<span class="tag ${t.costBps <= 200 ? "go" : t.costBps <= 300 ? "amber" : "red"}">BUY+SELL COSTS ${Math.max(0, t.costBps / 100).toFixed(1)}%</span>` : ""}${t.buyers60 ? `<span class="tag grey">${t.buyers60} BUYERS / MIN</span>` : ""}</div>${t.full ? "" : `<div class="why">Still checking who holds the coin.</div>`}${addr(t.mint)}</div>`).join("") : `<div class="empty">Nothing clean in the last 15 minutes.</div>`;
   const buyCol = [...b.buyEarly, ...b.other].sort((x, y) => (x.kind === "ENTER" ? 0 : 1) - (y.kind === "ENTER" ? 0 : 1) || x.ageS - y.ageS);
   $("n3").textContent = buyCol.length;
   $("c3").innerHTML = buyCol.length ? buyCol.slice(0, 12).map((x) => sigCard(x, "go", fresh(x))).join("") : `<div class="empty">No buy pattern in the last 10 minutes.</div>`;
   $("n4").textContent = b.dipHunt.length;
   $("c4").innerHTML = b.dipHunt.length ? b.dipHunt.map((x) => sigCard(x, "purple", fresh(x))).join("") : `<div class="empty">No dip with buyers coming back in the last 10 minutes.</div>`;
   $("n5").textContent = b.sell.length;
-  $("c5").innerHTML = b.sell.length ? b.sell.map((x) => `<div class="card red ${fresh(x) ? "fresh" : ""}"><div class="head">${tok(x.mint)}<div class="age">${ago(x.ageS)} ago</div></div><p class="say"><b>Get out.</b> ${esc(x.reasons.join("; "))}.</p><div class="live">${LIVE[x.mint] ? `now <b>${px(LIVE[x.mint].price)}</b>` : ""}</div></div>`).join("") : `<div class="empty">No dumps on watched coins in the last 10 minutes.</div>`;
+  $("c5").innerHTML = b.sell.length ? b.sell.map((x) => `<div class="card red ${fresh(x) ? "fresh" : ""}"><div class="head">${tok(x.mint)}<div class="age">${ago(x.ageS)} ago</div></div><p class="say"><b>Sell now if you hold it.</b> ${esc(plainSell(x.reasons))}</p><div class="live">${LIVE[x.mint] ? `price now <b>${px(LIVE[x.mint].price)}</b>` : ""}</div>${addr(x.mint)}</div>`).join("") : `<div class="empty">No dumps on watched coins in the last 10 minutes.</div>`;
   first = false;
 }
 const strat = (s) => ({ A_continuation: "rested, now going again", B_breakout_retest: "broke its high and held", B_breakout_no_retest: "breaking out", C_early_acceleration: "buyers piling in", E_dip_hunt: "dip, buyers back" }[s] || s);
